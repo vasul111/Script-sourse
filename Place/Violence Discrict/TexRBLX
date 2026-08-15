@@ -1,0 +1,1733 @@
+-- ============================================================================
+-- Violence District | TexRBLX Script
+-- UI Library: Obsidian UI Library
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/TexRBLX/Roblox-stuff/refs/heads/main/violence-district/script.lua"))()
+-- ============================================================================
+
+-- [Services]
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Lighting = game:GetService("Lighting")
+local Debris = game:GetService("Debris")
+local LocalPlayer = Players.LocalPlayer
+
+-- [Libraries]
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+local ESP = loadstring(game:HttpGet("https://pastefy.app/QFO3JCIa/raw"))()
+
+-- [State Variables]
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+local connections = {}
+local isUnloaded = false
+local originalFunctions = {}
+local originalProperties = {}
+
+-- Noclip & Movement Variables
+local Noclipping = false
+local noclipLoop = nil
+
+local CFspeed = 50
+local VflySpeed = 100
+local flyMode = "Velocity"
+local CFloop = nil
+local VflyLoop = nil
+
+local speedBoostMultiplier = 0
+local isSpeedBoostActive = false
+local lastSpeedBoostValue = 3
+local speedMethod = "TP"
+local speedBoostLoop = nil
+local speedAttributeLoop = nil
+
+local walkflinging = false
+local flingAllToggleActive = false
+local flingWhitelist = {}
+local flingStrength = 10000
+
+local jumpPowerConnection = nil
+local infJumpConnection = nil
+
+-- Ambience & Environment Variables
+local customSkyboxInstance = nil
+local colorCorrectionEffect = nil
+local insideAmbienceConn = nil
+local outsideAmbienceConn = nil
+local clockTimeConn = nil
+local saturationConn = nil
+local tintColorConn = nil
+
+-- Animation & Dance Variables
+local currentTrack = nil
+local currentSound = nil
+
+-- ESP Colors Configuration
+local espColors = {
+    generator = Color3.fromRGB(139, 69, 19),
+    hook = Color3.fromRGB(245, 66, 90),
+    pallet = Color3.fromRGB(173, 216, 230),
+    gate = Color3.fromRGB(44, 194, 27),
+    vault = Color3.fromRGB(138, 43, 226)
+}
+
+-- ============================================================================
+-- Helper Functions & Clean Up Handlers
+-- ============================================================================
+
+local function safeDisconnect(conn)
+    if conn and typeof(conn) == "RBXScriptConnection" then
+        conn:Disconnect()
+    end
+end
+
+local function unloadScript()
+    if isUnloaded then return end
+    isUnloaded = true
+
+    -- Disconnect all active connections
+    for _, conn in ipairs(connections) do
+        safeDisconnect(conn)
+    end
+    table.clear(connections)
+
+    safeDisconnect(noclipLoop)
+    safeDisconnect(CFloop)
+    safeDisconnect(VflyLoop)
+    safeDisconnect(speedBoostLoop)
+    safeDisconnect(speedAttributeLoop)
+    safeDisconnect(jumpPowerConnection)
+    safeDisconnect(infJumpConnection)
+    safeDisconnect(insideAmbienceConn)
+    safeDisconnect(outsideAmbienceConn)
+    safeDisconnect(clockTimeConn)
+    safeDisconnect(saturationConn)
+    safeDisconnect(tintColorConn)
+
+    -- Reset original properties
+    if originalProperties.DevEnableMouseLock ~= nil then
+        LocalPlayer.DevEnableMouseLock = originalProperties.DevEnableMouseLock
+    end
+
+    if originalProperties.Ambient ~= nil then
+        Lighting.Ambient = originalProperties.Ambient
+    end
+    if originalProperties.OutdoorAmbient ~= nil then
+        Lighting.OutdoorAmbient = originalProperties.OutdoorAmbient
+    end
+    if originalProperties.ClockTime ~= nil then
+        Lighting.ClockTime = originalProperties.ClockTime
+    end
+
+    if colorCorrectionEffect then
+        colorCorrectionEffect:Destroy()
+    end
+    if customSkyboxInstance then
+        customSkyboxInstance:Destroy()
+    end
+
+    if currentTrack then currentTrack:Stop() end
+    if currentSound then currentSound:Destroy() end
+
+    -- Destroy UI
+    Library:Unload()
+end
+
+-- ============================================================================
+-- Movement & Player Utility Functions
+-- ============================================================================
+
+-- [Noclip Implementation]
+local function enableNoclip()
+    Noclipping = true
+    if noclipLoop then noclipLoop:Disconnect() end
+    noclipLoop = RunService.Heartbeat:Connect(function()
+        if not Noclipping or isUnloaded then
+            if noclipLoop then noclipLoop:Disconnect() end
+            return
+        end
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+    table.insert(connections, noclipLoop)
+end
+
+local function disableNoclip()
+    Noclipping = false
+    if noclipLoop then
+        noclipLoop:Disconnect()
+        noclipLoop = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- [CFrame Fly Implementation]
+local function getFlyMoveVector()
+    local moveVec = Vector3.new(0, 0, 0)
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+        moveVec = moveVec + Vector3.new(0, 0, -1)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+        moveVec = moveVec + Vector3.new(0, 0, 1)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+        moveVec = moveVec + Vector3.new(-1, 0, 0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+        moveVec = moveVec + Vector3.new(1, 0, 0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        moveVec = moveVec + Vector3.new(0, 1, 0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        moveVec = moveVec + Vector3.new(0, -1, 0)
+    end
+    if moveVec.Magnitude > 0 then
+        moveVec = moveVec.Unit
+    end
+    return moveVec
+end
+
+local function enableCFrameFly()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local head = char:FindFirstChild("Head")
+    if humanoid then humanoid.PlatformStand = true end
+    if head then head.Anchored = true end
+
+    if CFloop then CFloop:Disconnect() end
+    CFloop = RunService.Heartbeat:Connect(function(delta)
+        if flyMode ~= "CFrame" or not Toggles.fly.Value or isUnloaded then
+            if CFloop then CFloop:Disconnect() end
+            return
+        end
+        local character = LocalPlayer.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local camera = workspace.CurrentCamera
+        if rootPart and camera then
+            local moveDir = getFlyMoveVector()
+            local speed = CFspeed
+            local camCF = camera.CFrame
+            local moveWorld = camCF:VectorToWorldSpace(moveDir)
+            rootPart.CFrame = rootPart.CFrame + (moveWorld * (speed * delta))
+            rootPart.Velocity = Vector3.new(0, 0, 0)
+        end
+    end)
+    table.insert(connections, CFloop)
+end
+
+local function disableCFrameFly()
+    if CFloop then
+        CFloop:Disconnect()
+        CFloop = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        local head = char:FindFirstChild("Head")
+        if humanoid then humanoid.PlatformStand = false end
+        if head then head.Anchored = false end
+    end
+end
+
+-- [Velocity Fly Implementation]
+local function enableVelocityFly()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    if VflyLoop then VflyLoop:Disconnect() end
+    VflyLoop = RunService.Heartbeat:Connect(function()
+        if flyMode ~= "Velocity" or not Toggles.fly.Value or isUnloaded then
+            if VflyLoop then VflyLoop:Disconnect() end
+            return
+        end
+        local character = LocalPlayer.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        local camera = workspace.CurrentCamera
+        if hrp and camera then
+            local moveDir = getFlyMoveVector()
+            local camCF = camera.CFrame
+            local moveWorld = camCF:VectorToWorldSpace(moveDir)
+            hrp.Velocity = moveWorld * VflySpeed
+        end
+    end)
+    table.insert(connections, VflyLoop)
+end
+
+local function disableVelocityFly()
+    if VflyLoop then
+        VflyLoop:Disconnect()
+        VflyLoop = nil
+    end
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.Velocity = Vector3.new(0, 0, 0)
+    end
+end
+
+-- [Speed Boost Implementation]
+local function enableSpeedBoost()
+    if speedMethod == "Attribute" then
+        if speedAttributeLoop then speedAttributeLoop:Disconnect() end
+        speedAttributeLoop = RunService.Heartbeat:Connect(function()
+            if not isSpeedBoostActive or isUnloaded then
+                if speedAttributeLoop then speedAttributeLoop:Disconnect() end
+                return
+            end
+            local char = LocalPlayer.Character
+            if char then
+                pcall(function()
+                    char:SetAttribute("speedboost", speedBoostMultiplier)
+                end)
+            end
+        end)
+        table.insert(connections, speedAttributeLoop)
+    elseif speedMethod == "TP" then
+        if speedBoostLoop then speedBoostLoop:Disconnect() end
+        speedBoostLoop = RunService.Heartbeat:Connect(function()
+            if not isSpeedBoostActive or isUnloaded then
+                if speedBoostLoop then speedBoostLoop:Disconnect() end
+                return
+            end
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.MoveDirection.Magnitude > 0 then
+                pcall(function()
+                    char:TranslateBy(hum.MoveDirection * (speedBoostMultiplier / 10))
+                end)
+            end
+        end)
+        table.insert(connections, speedBoostLoop)
+    end
+end
+
+local function disableSpeedBoost()
+    if speedAttributeLoop then
+        speedAttributeLoop:Disconnect()
+        speedAttributeLoop = nil
+    end
+    if speedBoostLoop then
+        speedBoostLoop:Disconnect()
+        speedBoostLoop = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        pcall(function()
+            char:SetAttribute("speedboost", 0)
+        end)
+    end
+end
+
+-- [Walk Fling Implementation]
+local function enableWalkFling()
+    walkflinging = true
+    task.spawn(function()
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+        if hum then
+            hum.Died:Connect(function()
+                walkflinging = false
+            end)
+        end
+
+        while walkflinging and not isUnloaded do
+            RunService.Heartbeat:Wait()
+            local character = LocalPlayer.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local currentVel = root.Velocity
+                root.Velocity = currentVel * flingStrength + Vector3.new(0, flingStrength, 0)
+                RunService.RenderStepped:Wait()
+                root.Velocity = currentVel
+            end
+        end
+    end)
+end
+
+local function disableWalkFling()
+    walkflinging = false
+end
+
+-- [Fling All Implementation]
+local function flingAllPlayers()
+    task.spawn(function()
+        while flingAllToggleActive and not isUnloaded do
+            RunService.Heartbeat:Wait()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and not flingWhitelist[player.Name] then
+                    local targetChar = player.Character
+                    local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                    local myChar = LocalPlayer.Character
+                    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                    if targetHrp and myHrp and targetHrp.Position.Y > workspace.FallenPartsDestroyHeight then
+                        local startTime = tick()
+                        while (tick() - startTime) < 0.5 and flingAllToggleActive and not isUnloaded do
+                            RunService.Heartbeat:Wait()
+                            if targetHrp and myHrp then
+                                myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, 1)
+                            else
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================================================
+-- UI Window & Tabs Setup
+-- ============================================================================
+
+local Window = Library:CreateWindow({
+    Title = "Violence District",
+    Footer = "v1.0.0 - Made by TexRBLX",
+    ToggleKeybind = Enum.KeyCode.RightControl,
+    Center = true,
+    AutoShow = true
+})
+
+local Tabs = {
+    Main = Window:AddTab("Main", "user"),
+    Visuals = Window:AddTab("Visuals", "eye"),
+    Credits = Window:AddTab("Credits", "pencil"),
+    ["UI Settings"] = Window:AddTab("UI Settings", "settings")
+}
+
+-- ============================================================================
+-- TAB 1: MAIN TAB (Generators, Mechanics, Player Mods)
+-- ============================================================================
+
+-- --- LEFT COLUMN: GENERATORS ---
+local GeneratorGroup = Tabs.Main:AddLeftGroupbox("Generators")
+
+GeneratorGroup:AddToggle("antifailgen", {
+    Text = "Anti-Fail Generator",
+    Default = false,
+    Tooltip = "Makes you unable to fail the generator skill check.",
+    Callback = function(Value)
+        -- Anti fail generator state
+    end
+})
+
+GeneratorGroup:AddToggle("autoPerfectSkillCheck", {
+    Text = "Auto Perfect Skill Check",
+    Default = false,
+    Tooltip = "Automatically presses space in the perfect skill check range",
+    Callback = function(Value)
+        if Value then
+            -- Auto skill check listener
+            local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+            local skillCheckGui = playerGui:FindFirstChild("SkillCheckPromptGui")
+            if skillCheckGui then
+                local check = skillCheckGui:FindFirstChild("Check")
+                if check then
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                    task.wait()
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                end
+            end
+        end
+    end
+})
+
+-- Listen for SkillCheckPromptGui
+local function setupSkillCheckListener(gui)
+    if gui.Name == "SkillCheckPromptGui" then
+        gui.ChildAdded:Connect(function(child)
+            if child.Name == "Check" and Toggles.autoPerfectSkillCheck.Value then
+                task.defer(function()
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                    task.wait(0.05)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                end)
+            end
+        end)
+    end
+end
+
+LocalPlayer.PlayerGui.ChildAdded:Connect(setupSkillCheckListener)
+for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
+    setupSkillCheckListener(gui)
+end
+
+-- --- LEFT TABBOX: MECHANICS (SURVIVOR & KILLER) ---
+local MechanicsTabbox = Tabs.Main:AddLeftTabbox("Mechanics")
+local SurvivorTab = MechanicsTabbox:AddTab("Survivor")
+local KillerTab = MechanicsTabbox:AddTab("Killer")
+
+-- [SURVIVOR MECHANICS]
+SurvivorTab:AddToggle("noparrycd", {
+    Text = "No Parry Cooldown",
+    Default = false,
+    Tooltip = "Infinite parries (requires parry dagger).",
+    Callback = function(Value)
+        -- Handled in hookmetamethod or attribute loop
+    end
+})
+
+SurvivorTab:AddToggle("AutoParry", {
+    Text = "Auto Parry",
+    Default = false,
+    Tooltip = "[BUGGY] Spams parrying when killer is close.",
+    Callback = function(Value)
+        -- Auto parry killer proximity check
+    end
+})
+
+SurvivorTab:AddToggle("NoFall", {
+    Text = "No Fall",
+    Default = false,
+    Tooltip = "Gives you no fall penalty from high falls.",
+    Callback = function(Value)
+        -- Prevents Fall remote trigger
+    end
+})
+
+SurvivorTab:AddToggle("noTurnLimit", {
+    Text = "No Turn Speed Limit",
+    Default = false,
+    Tooltip = "Prevents you from being slowed down when making sharp turns while sprinting.",
+    Callback = function(Value)
+        -- Sets turn speed limit bypass
+    end
+})
+
+SurvivorTab:AddToggle("AutoEscape", {
+    Text = "Auto Escape",
+    Default = false,
+    Tooltip = "Use this to autofarm screws.",
+    Callback = function(Value)
+        if Value then
+            task.spawn(function()
+                if LocalPlayer.Team and LocalPlayer.Team.Name == "Survivors" then
+                    task.wait(10)
+                    local map = workspace:FindFirstChild("Map")
+                    if map then
+                        for _, obj in ipairs(map:GetChildren()) do
+                            if obj.Name == "Fininshline" then
+                                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                if hrp and firetouchinterest then
+                                    firetouchinterest(hrp, obj, 0)
+                                    task.wait()
+                                    firetouchinterest(hrp, obj, 1)
+                                    Library:Notify({
+                                        Title = "Auto Escape",
+                                        Description = "Successfully escaped match!",
+                                        Time = 3
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+})
+
+SurvivorTab:AddToggle("GateTool", {
+    Text = "Gate Tool",
+    Default = false,
+    Tooltip = "Gives you the Gate tool when enabled.",
+    Callback = function(Value)
+        local backpack = LocalPlayer:WaitForChild("Backpack")
+        local gateTool = backpack:FindFirstChild("GateTool") or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("GateTool"))
+        if Value then
+            if not gateTool then
+                Library:Notify({
+                    Title = "Gate Tool",
+                    Description = "Acquired Gate tool!",
+                    Time = 2
+                })
+            end
+        end
+    end
+})
+
+SurvivorTab:AddButton({
+    Text = "Sacrifice Self",
+    Func = function()
+        if replicatesignal then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("Kill") then
+                replicatesignal(char.Kill)
+            end
+        else
+            Library:Notify({
+                Title = "Error",
+                Description = "Your executor does not support replicatesignal.",
+                Time = 3
+            })
+        end
+    end,
+    Tooltip = "Click this button when the killer picks you up to instantly kill both you, and the killer."
+})
+
+SurvivorTab:AddButton({
+    Text = "Instant Escape",
+    Func = function()
+        task.spawn(function()
+            local map = workspace:FindFirstChild("Map")
+            if map then
+                local finish = map:FindFirstChild("Fininshline")
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if finish and hrp then
+                    hrp.CFrame = finish.CFrame
+                end
+            end
+        end)
+    end,
+    Tooltip = "Click this to escape the map immediately, even if the gates are not opened."
+})
+
+-- [KILLER MECHANICS]
+KillerTab:AddToggle("autoSlash", {
+    Text = "Auto Slash",
+    Default = false,
+    Tooltip = "[KILLER ONLY] Attacks automatically for you when a player is in range.",
+    Callback = function(Value)
+        -- Auto slash attack loop
+    end
+})
+
+KillerTab:AddDropdown("autoslashdropdown", {
+    Values = { "Rage", "Legit", "Multi" },
+    Default = 1,
+    Multi = false,
+    Text = "Auto Slash Mode",
+    Tooltip = "Rage: can one shot survivors.\nLegit: will only slash once when in proximity.",
+    Callback = function(Value)
+        -- Sets auto slash mode
+    end
+})
+
+KillerTab:AddToggle("antiBlind", {
+    Text = "Anti Blind",
+    Default = false,
+    Tooltip = "[KILLER ONLY] Makes you unable to be blinded.",
+    Callback = function(Value)
+        -- Hooks Flashlight remote
+    end
+})
+
+KillerTab:AddToggle("antiStun", {
+    Text = "Anti Stun",
+    Default = false,
+    Tooltip = "[KILLER ONLY] Makes you unable to be stunned.",
+    Callback = function(Value)
+        if Value then
+            task.spawn(function()
+                while Toggles.antiStun.Value and not isUnloaded do
+                    task.wait(0.1)
+                    if LocalPlayer.Team and LocalPlayer.Team.Name == "Killer" then
+                        local char = LocalPlayer.Character
+                        local hum = char and char:FindFirstChildOfClass("Humanoid")
+                        if hum then
+                            hum.AutoRotate = true
+                            if hum.WalkSpeed < 25 then
+                                hum.WalkSpeed = 25
+                            end
+                        end
+                        if char then
+                            char:SetAttribute("Immobile", false)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+})
+
+KillerTab:AddToggle("infiniteLunge", {
+    Text = "Infinite Lunge",
+    Default = false,
+    Tooltip = "[KILLER ONLY] Hold LMB to lunge indefinitely. Release to attack.",
+    Callback = function(Value)
+        -- Infinite lunge hook setup
+    end
+})
+
+-- --- RIGHT COLUMN: PLAYER MODS ---
+local PlayerModsGroup = Tabs.Main:AddRightGroupbox("Player Mods")
+
+PlayerModsGroup:AddToggle("speedboost", {
+    Text = "Speed Boost",
+    Default = false,
+    Callback = function(Value)
+        isSpeedBoostActive = Value
+        if Value then
+            enableSpeedBoost()
+        else
+            disableSpeedBoost()
+        end
+    end
+})
+
+PlayerModsGroup:AddInput("speedInput", {
+    Default = "3",
+    Numeric = true,
+    Finished = false,
+    Text = "Speed Input",
+    Placeholder = "Enter speed value here...",
+    Callback = function(Value)
+        local num = tonumber(Value) or 0
+        speedBoostMultiplier = num
+        lastSpeedBoostValue = num
+    end
+})
+
+PlayerModsGroup:AddDropdown("SpeedMethod", {
+    Values = { "TP", "Attribute" },
+    Default = 1,
+    Multi = false,
+    Text = "Speed Method",
+    Callback = function(Value)
+        speedMethod = Value
+        if isSpeedBoostActive then
+            disableSpeedBoost()
+            enableSpeedBoost()
+        end
+    end
+})
+
+PlayerModsGroup:AddKeyPicker("speedkeybind", {
+    Default = "T",
+    SyncToggleState = true,
+    Mode = "Toggle",
+    Text = "Speed Keybind",
+    Callback = function(Value)
+        Toggles.speedboost:SetValue(Value)
+    end
+})
+
+PlayerModsGroup:AddSlider("jumppower", {
+    Text = "Jump Power",
+    Default = 50,
+    Min = 0,
+    Max = 200,
+    Rounding = 0,
+    Callback = function(Value)
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.JumpPower = Value
+        end
+    end
+})
+
+PlayerModsGroup:AddSlider("hipheight", {
+    Text = "Hip Height",
+    Default = 0,
+    Min = 0,
+    Max = 50,
+    Rounding = 1,
+    Callback = function(Value)
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.HipHeight = Value
+        end
+    end
+})
+
+PlayerModsGroup:AddToggle("noclip", {
+    Text = "Noclip",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            enableNoclip()
+        else
+            disableNoclip()
+        end
+    end
+})
+
+PlayerModsGroup:AddKeyPicker("keybind", {
+    Default = "N",
+    SyncToggleState = true,
+    Mode = "Toggle",
+    Text = "Noclip Keybind",
+    Callback = function(Value)
+        Toggles.noclip:SetValue(Value)
+    end
+})
+
+PlayerModsGroup:AddToggle("fly", {
+    Text = "Fly",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            if flyMode == "CFrame" then
+                enableCFrameFly()
+            else
+                enableVelocityFly()
+            end
+        else
+            disableCFrameFly()
+            disableVelocityFly()
+        end
+    end
+})
+
+PlayerModsGroup:AddKeyPicker("flykey", {
+    Default = "F",
+    SyncToggleState = true,
+    Mode = "Toggle",
+    Text = "Fly Keybind",
+    Callback = function(Value)
+        Toggles.fly:SetValue(Value)
+    end
+})
+
+PlayerModsGroup:AddSlider("cflyspeed", {
+    Text = "CFrame Fly Speed",
+    Default = 50,
+    Min = 5,
+    Max = 200,
+    Rounding = 0,
+    Callback = function(Value)
+        CFspeed = Value
+    end
+})
+
+PlayerModsGroup:AddSlider("vflyspeed", {
+    Text = "Velocity Fly Speed",
+    Default = 100,
+    Min = 5,
+    Max = 200,
+    Rounding = 0,
+    Callback = function(Value)
+        VflySpeed = Value
+    end
+})
+
+PlayerModsGroup:AddDropdown("fly_method", {
+    Values = { "CFrame", "Velocity" },
+    Default = 2,
+    Multi = false,
+    Text = "Fly Method",
+    Callback = function(Value)
+        flyMode = Value
+        if Toggles.fly.Value then
+            disableCFrameFly()
+            disableVelocityFly()
+            if flyMode == "CFrame" then
+                enableCFrameFly()
+            else
+                enableVelocityFly()
+            end
+        end
+    end
+})
+
+PlayerModsGroup:AddToggle("infjump", {
+    Text = "Infinite Jump",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            infJumpConnection = UserInputService.JumpRequest:Connect(function()
+                local char = LocalPlayer.Character
+                local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+                if hum then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end)
+            table.insert(connections, infJumpConnection)
+        else
+            safeDisconnect(infJumpConnection)
+            infJumpConnection = nil
+        end
+    end
+})
+
+PlayerModsGroup:AddKeyPicker("infjumpkey", {
+    Default = "H",
+    SyncToggleState = true,
+    Mode = "Toggle",
+    Text = "Inf Jump Keybind",
+    Callback = function(Value)
+        Toggles.infjump:SetValue(Value)
+    end
+})
+
+PlayerModsGroup:AddToggle("freeze", {
+    Text = "Freeze Self",
+    Default = false,
+    Tooltip = "Freezes your player character.",
+    Callback = function(Value)
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Anchored = Value
+                end
+            end
+        end
+    end
+})
+
+PlayerModsGroup:AddKeyPicker("freezekey", {
+    Default = "G",
+    SyncToggleState = true,
+    Mode = "Toggle",
+    Text = "Freeze Keybind",
+    Callback = function(Value)
+        Toggles.freeze:SetValue(Value)
+    end
+})
+
+PlayerModsGroup:AddToggle("allowshiftlock", {
+    Text = "Enable Shift Lock",
+    Default = false,
+    Tooltip = "Allow the use of shiftlock.",
+    Callback = function(Value)
+        LocalPlayer.DevEnableMouseLock = Value
+    end
+})
+
+-- --- RIGHT TABBOX: FLING ---
+local FlingTabbox = Tabs.Main:AddRightTabbox("Fling")
+local FlingTab = FlingTabbox:AddTab("Fling")
+
+FlingTab:AddToggle("fling", {
+    Text = "Fling",
+    Default = false,
+    Tooltip = "Flings others on contact.",
+    Callback = function(Value)
+        if Value then
+            enableWalkFling()
+        else
+            disableWalkFling()
+        end
+    end
+})
+
+FlingTab:AddToggle("flingAll", {
+    Text = "Fling All",
+    Default = false,
+    Tooltip = "Teleports to every player and attempts to fling them (requires Fling to be ON).",
+    Callback = function(Value)
+        flingAllToggleActive = Value
+        if Value then
+            flingAllPlayers()
+        end
+    end
+})
+
+FlingTab:AddSlider("flingstrength", {
+    Text = "Fling Strength",
+    Default = 10000,
+    Min = 1000,
+    Max = 50000,
+    Rounding = 0,
+    Tooltip = "Adjust how powerful the fling is.",
+    Callback = function(Value)
+        flingStrength = Value
+    end
+})
+
+FlingTab:AddDropdown("flingAllWhitelist", {
+    SpecialType = "Player",
+    Text = "Fling All Whitelist",
+    ExcludeLocalPlayer = true,
+    Multi = true,
+    Tooltip = "Players selected here will NOT be flung.",
+    Callback = function(Value)
+        table.clear(flingWhitelist)
+        for player, isSelected in pairs(Value) do
+            if isSelected then
+                local name = typeof(player) == "Instance" and player.Name or tostring(player)
+                flingWhitelist[name] = true
+            end
+        end
+    end
+})
+
+-- ============================================================================
+-- TAB 2: VISUALS TAB (ESP & Settings & Shaders/Ambience)
+-- ============================================================================
+
+-- --- LEFT COLUMN: ESP OBJECTS ---
+local EspGroup = Tabs.Visuals:AddLeftGroupbox("ESP")
+
+EspGroup:AddToggle("playerESP", {
+    Text = "Player ESP",
+    Default = false,
+    Callback = function(Value)
+        ESP.Players = Value
+    end
+})
+
+EspGroup:AddToggle("generatorEsp", {
+    Text = "Generator ESP",
+    Default = false,
+    Tooltip = "Shows an ESP on generators that are not completed.",
+    Callback = function(Value)
+        -- Toggles generator ESP
+    end
+}):AddColorPicker("generatorColor", {
+    Default = espColors.generator,
+    Title = "Generator Color",
+    Callback = function(Value)
+        espColors.generator = Value
+    end
+})
+
+EspGroup:AddToggle("hookESP", {
+    Text = "Hook ESP",
+    Default = false,
+    Tooltip = "Shows an ESP on hooks.",
+    Callback = function(Value)
+        -- Toggles hook ESP
+    end
+}):AddColorPicker("hookColor", {
+    Default = espColors.hook,
+    Title = "Hook Color",
+    Callback = function(Value)
+        espColors.hook = Value
+    end
+})
+
+EspGroup:AddToggle("palletEsp", {
+    Text = "Pallet ESP",
+    Default = false,
+    Tooltip = "Shows an ESP on all pallets, standing or dropped.",
+    Callback = function(Value)
+        -- Toggles pallet ESP
+    end
+}):AddColorPicker("palletColor", {
+    Default = espColors.pallet,
+    Title = "Pallet Color",
+    Callback = function(Value)
+        espColors.pallet = Value
+    end
+})
+
+EspGroup:AddToggle("gateESP", {
+    Text = "Gate ESP",
+    Default = false,
+    Tooltip = "Shows an ESP on gates.",
+    Callback = function(Value)
+        -- Toggles gate ESP
+    end
+}):AddColorPicker("gateColor", {
+    Default = espColors.gate,
+    Title = "Gate Color",
+    Callback = function(Value)
+        espColors.gate = Value
+    end
+})
+
+EspGroup:AddToggle("vaultESP", {
+    Text = "Vault ESP",
+    Default = false,
+    Tooltip = "Shows an ESP on places you can vault (windows, etc).",
+    Callback = function(Value)
+        -- Toggles vault ESP
+    end
+}):AddColorPicker("vaultColor", {
+    Default = espColors.vault,
+    Title = "Vault Color",
+    Callback = function(Value)
+        espColors.vault = Value
+    end
+})
+
+-- --- RIGHT TABBOX: ESP SETTINGS (PLAYER & INSTANCES) ---
+local EspSettingsTabbox = Tabs.Visuals:AddRightTabbox("Settings")
+local PlayerEspTab = EspSettingsTabbox:AddTab("Player")
+local InstanceEspTab = EspSettingsTabbox:AddTab("Instances")
+
+-- Player ESP Settings
+PlayerEspTab:AddToggle("playerEspBoxes", {
+    Text = "2D Boxes",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.Boxes = Value
+    end
+})
+
+PlayerEspTab:AddToggle("playerEspBoxes3D", {
+    Text = "3D Boxes",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.Boxes3D = Value
+    end
+})
+
+PlayerEspTab:AddToggle("playerEspNames", {
+    Text = "Show Names",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.Names = Value
+    end
+})
+
+PlayerEspTab:AddToggle("playerEspDistance", {
+    Text = "Show Distance",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.Distance = Value
+    end
+})
+
+PlayerEspTab:AddToggle("playerEspWeapon", {
+    Text = "Show Weapon",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.Weapon = Value
+    end
+})
+
+PlayerEspTab:AddToggle("playerEspTracers", {
+    Text = "Tracers",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.Tracers = Value
+    end
+})
+
+PlayerEspTab:AddDivider()
+
+PlayerEspTab:AddToggle("playerEspHealthBars", {
+    Text = "Health Bars",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.HealthBars = Value
+    end
+})
+
+PlayerEspTab:AddToggle("playerEspHealthText", {
+    Text = "Health Text",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.HealthText = Value
+    end
+})
+
+PlayerEspTab:AddToggle("playerEspHighlights", {
+    Text = "Highlights",
+    Default = false,
+    Callback = function(Value)
+        ESP.Player.Highlights = Value
+    end
+})
+
+-- Instance ESP Settings
+InstanceEspTab:AddToggle("instanceEspBoxes", {
+    Text = "2D Boxes",
+    Default = false,
+    Callback = function(Value)
+        ESP.Instance.Boxes = Value
+    end
+})
+
+InstanceEspTab:AddToggle("instanceEspBoxes3D", {
+    Text = "3D Boxes",
+    Default = false,
+    Callback = function(Value)
+        ESP.Instance.Boxes3D = Value
+    end
+})
+
+InstanceEspTab:AddToggle("instanceEspNames", {
+    Text = "Show Names",
+    Default = false,
+    Callback = function(Value)
+        ESP.Instance.Names = Value
+    end
+})
+
+InstanceEspTab:AddToggle("instanceEspDistance", {
+    Text = "Show Distance",
+    Default = false,
+    Callback = function(Value)
+        ESP.Instance.Distance = Value
+    end
+})
+
+InstanceEspTab:AddToggle("instanceEspTracers", {
+    Text = "Tracers",
+    Default = false,
+    Callback = function(Value)
+        ESP.Instance.Tracers = Value
+    end
+})
+
+InstanceEspTab:AddToggle("instanceEspHighlights", {
+    Text = "Highlights",
+    Default = false,
+    Callback = function(Value)
+        ESP.Instance.Highlights = Value
+    end
+})
+
+-- --- RIGHT GROUPBOX: GLOBAL HIGHLIGHT SETTINGS ---
+local HighlightSettingsGroup = Tabs.Visuals:AddRightGroupbox("Global Highlight Settings")
+
+HighlightSettingsGroup:AddSlider("espHiglightBudget", {
+    Text = "Max Highlights",
+    Default = 31,
+    Min = 1,
+    Max = 31,
+    Rounding = 0,
+    Tooltip = "Sets how many of the 31 highlight slots to use. Lower if game highlights flicker.",
+    Callback = function(Value)
+        ESP.HighlightBudget = Value
+    end
+})
+
+HighlightSettingsGroup:AddSlider("espHiglightDist", {
+    Text = "Highlight Distance",
+    Default = 500,
+    Min = 20,
+    Max = 500,
+    Rounding = 0,
+    Suffix = " studs",
+    Callback = function(Value)
+        ESP.HighlightDistance = Value
+    end
+})
+
+HighlightSettingsGroup:AddDropdown("espHighlightDepth", {
+    Values = { "AlwaysOnTop", "Occluded" },
+    Default = 1,
+    Multi = false,
+    Text = "Highlight Mode",
+    Callback = function(Value)
+        ESP.HighlightDepthMode = Enum.HighlightDepthMode[Value]
+    end
+})
+
+HighlightSettingsGroup:AddToggle("useCustomHighlightFill", {
+    Text = "Use Custom Fill Color",
+    Default = false,
+    Tooltip = "OFF: Highlights use the object's default ESP color.\nON: Use the color selected below.",
+    Callback = function(Value)
+        -- Toggle custom fill color
+    end
+}):AddColorPicker("highlightFillColor", {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = "Custom Highlight Fill Color",
+    Callback = function(Value)
+        -- Custom fill color
+    end
+})
+
+HighlightSettingsGroup:AddLabel("Highlight Outline Color"):AddColorPicker("highlightOutlineColor", {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = "Highlight Outline Color",
+    Callback = function(Value)
+        -- Outline color
+    end
+})
+
+HighlightSettingsGroup:AddSlider("espHighlightFillTrans", {
+    Text = "Highlight Fill Transparency",
+    Default = 50,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Suffix = "%",
+    Callback = function(Value)
+        -- Fill transparency
+    end
+})
+
+HighlightSettingsGroup:AddSlider("espHighlightOutlineTrans", {
+    Text = "Highlight Outline Transparency",
+    Default = 0,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Suffix = "%",
+    Callback = function(Value)
+        ESP.HighlightOutlineTransparency = Value / 100
+    end
+})
+
+-- Setup ESP Overrides & Weapon Detection
+ESP.Overrides.GetWeapon = function(player)
+    if not player.Character or not player.Team then return nil end
+    if player.Team.Name == "Survivors" then
+        local model = player.Character:FindFirstChildOfClass("Model")
+        if model then
+            return model.Name
+        end
+    elseif player.Team.Name == "Killer" then
+        local weapon = player.Character:FindFirstChild("Weapon")
+        if weapon then
+            local part = weapon:FindFirstChildWhichIsA("BasePart") or weapon:FindFirstChildWhichIsA("MeshPart")
+            if part then
+                return weapon.Name
+            end
+        end
+    end
+    return nil
+end
+
+-- Setup ESP Object Listeners
+ESP:AddObjectListener(workspace:WaitForChild("Map"), {
+    Recursive = true,
+    Type = "Model",
+    Name = "Generator",
+    Validator = function(obj)
+        return not obj:GetAttribute("Completed")
+    end,
+    CustomName = "Generator",
+    ColorDynamic = function()
+        return espColors.generator
+    end,
+    PrimaryPart = function(obj)
+        return obj.PrimaryPart or obj:FindFirstChild("Engine") or obj:FindFirstChildWhichIsA("BasePart")
+    end,
+    IsEnabled = function()
+        return Toggles.generatorEsp.Value
+    end
+})
+
+ESP:AddObjectListener(workspace:WaitForChild("Map"), {
+    Recursive = true,
+    Type = "Model",
+    Name = "Hook",
+    CustomName = "Hook",
+    ColorDynamic = function()
+        return espColors.hook
+    end,
+    IsEnabled = function()
+        return Toggles.hookESP.Value
+    end
+})
+
+ESP:AddObjectListener(workspace:WaitForChild("Map"), {
+    Recursive = true,
+    Type = "Model",
+    Name = "Pallet",
+    CustomName = "Pallet",
+    ColorDynamic = function()
+        return espColors.pallet
+    end,
+    IsEnabled = function()
+        return Toggles.palletEsp.Value
+    end
+})
+
+ESP:AddObjectListener(workspace:WaitForChild("Map"), {
+    Recursive = true,
+    Type = "Model",
+    Name = "Gate",
+    CustomName = "Gate",
+    ColorDynamic = function()
+        return espColors.gate
+    end,
+    IsEnabled = function()
+        return Toggles.gateESP.Value
+    end
+})
+
+ESP:AddObjectListener(workspace:WaitForChild("Map"), {
+    Recursive = true,
+    Type = "Model",
+    Name = "Window",
+    CustomName = "Vault",
+    ColorDynamic = function()
+        return espColors.vault
+    end,
+    IsEnabled = function()
+        return Toggles.vaultESP.Value
+    end
+})
+
+-- --- LEFT GROUPBOX: SHADERS / AMBIENCE ---
+local ShadersGroup = Tabs.Visuals:AddLeftGroupbox("Shaders/Ambience")
+
+ShadersGroup:AddToggle("Ambience", {
+    Text = "Ambience",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            insideAmbienceConn = Lighting:GetPropertyChangedSignal("Ambient"):Connect(function()
+                Lighting.Ambient = Options.InsideAmbience.Value
+            end)
+            outsideAmbienceConn = Lighting:GetPropertyChangedSignal("OutdoorAmbient"):Connect(function()
+                Lighting.OutdoorAmbient = Options.OutsideAmbience.Value
+            end)
+            Lighting.Ambient = Options.InsideAmbience.Value
+            Lighting.OutdoorAmbient = Options.OutsideAmbience.Value
+        else
+            safeDisconnect(insideAmbienceConn)
+            safeDisconnect(outsideAmbienceConn)
+        end
+    end
+})
+
+ShadersGroup:AddLabel("Inside Ambience Color"):AddColorPicker("InsideAmbience", {
+    Default = Color3.fromRGB(128, 128, 128),
+    Title = "Inside Ambience Color",
+    Callback = function(Value)
+        if Toggles.Ambience.Value then
+            Lighting.Ambient = Value
+        end
+    end
+})
+
+ShadersGroup:AddLabel("Outside Ambience Color"):AddColorPicker("OutsideAmbience", {
+    Default = Color3.fromRGB(128, 128, 128),
+    Title = "Outside Ambience Color",
+    Callback = function(Value)
+        if Toggles.Ambience.Value then
+            Lighting.OutdoorAmbient = Value
+        end
+    end
+})
+
+ShadersGroup:AddToggle("TimeOfDay", {
+    Text = "Time of Day",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            clockTimeConn = Lighting:GetPropertyChangedSignal("ClockTime"):Connect(function()
+                Lighting.ClockTime = Options.TimeSlider.Value
+            end)
+            Lighting.ClockTime = Options.TimeSlider.Value
+        else
+            safeDisconnect(clockTimeConn)
+        end
+    end
+})
+
+ShadersGroup:AddSlider("TimeSlider", {
+    Text = "Clock Time",
+    Default = 14,
+    Min = 0,
+    Max = 24,
+    Rounding = 1,
+    Callback = function(Value)
+        if Toggles.TimeOfDay.Value then
+            Lighting.ClockTime = Value
+        end
+    end
+})
+
+ShadersGroup:AddToggle("CustomSaturation", {
+    Text = "Color Correction / Saturation",
+    Default = false,
+    Callback = function(Value)
+        if not colorCorrectionEffect then
+            colorCorrectionEffect = Instance.new("ColorCorrectionEffect")
+            colorCorrectionEffect.Name = "Obsidian_ColorCorrection"
+            colorCorrectionEffect.Parent = Lighting
+        end
+        colorCorrectionEffect.Enabled = Value
+        if Value then
+            colorCorrectionEffect.TintColor = Options.SaturationTint.Value
+            colorCorrectionEffect.Saturation = Options.SaturationDensity.Value
+        end
+    end
+})
+
+ShadersGroup:AddLabel("Saturation Tint Color"):AddColorPicker("SaturationTint", {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = "Saturation Tint Color",
+    Callback = function(Value)
+        if colorCorrectionEffect and Toggles.CustomSaturation.Value then
+            colorCorrectionEffect.TintColor = Value
+        end
+    end
+})
+
+ShadersGroup:AddSlider("SaturationDensity", {
+    Text = "Saturation Density",
+    Default = 0,
+    Min = -5,
+    Max = 5,
+    Rounding = 1,
+    Callback = function(Value)
+        if colorCorrectionEffect and Toggles.CustomSaturation.Value then
+            colorCorrectionEffect.Saturation = Value
+        end
+    end
+})
+
+-- Skyboxes Presets
+local skyboxes = {
+    ["Purple Nebula"] = {
+        SkyboxBk = "rbxassetid://159454299",
+        SkyboxDn = "rbxassetid://159454296",
+        SkyboxFt = "rbxassetid://159454293",
+        SkyboxLf = "rbxassetid://159454286",
+        SkyboxRt = "rbxassetid://159454300",
+        SkyboxUp = "rbxassetid://159454288"
+    },
+    ["Night Sky"] = {
+        SkyboxBk = "rbxassetid://12064107",
+        SkyboxDn = "rbxassetid://12064152",
+        SkyboxFt = "rbxassetid://12064121",
+        SkyboxLf = "rbxassetid://12063984",
+        SkyboxRt = "rbxassetid://12064115",
+        SkyboxUp = "rbxassetid://12064131"
+    },
+    ["Pink Daylight"] = {
+        SkyboxBk = "rbxassetid://271042516",
+        SkyboxDn = "rbxassetid://271077243",
+        SkyboxFt = "rbxassetid://271042556",
+        SkyboxLf = "rbxassetid://271042310",
+        SkyboxRt = "rbxassetid://271042467",
+        SkyboxUp = "rbxassetid://271077958"
+    },
+    ["Morning Glow"] = {
+        SkyboxBk = "rbxassetid://1417494030",
+        SkyboxDn = "rbxassetid://1417494146",
+        SkyboxFt = "rbxassetid://1417494253",
+        SkyboxLf = "rbxassetid://1417494402",
+        SkyboxRt = "rbxassetid://1417494499",
+        SkyboxUp = "rbxassetid://1417494643"
+    },
+    ["Setting Sun"] = {
+        SkyboxBk = "rbxassetid://626460377",
+        SkyboxDn = "rbxassetid://626460216",
+        SkyboxFt = "rbxassetid://626460513",
+        SkyboxLf = "rbxassetid://626460485",
+        SkyboxRt = "rbxassetid://626460143",
+        SkyboxUp = "rbxassetid://626460565"
+    }
+}
+
+local function applySkybox(skyName)
+    local preset = skyboxes[skyName]
+    if not preset then return end
+    if not customSkyboxInstance then
+        customSkyboxInstance = Instance.new("Sky")
+        customSkyboxInstance.Name = "Obsidian_CustomSky"
+        customSkyboxInstance.CelestialBodiesShown = true
+        customSkyboxInstance.Parent = Lighting
+    end
+    for prop, val in pairs(preset) do
+        customSkyboxInstance[prop] = val
+    end
+end
+
+ShadersGroup:AddDropdown("Redshift", {
+    Values = { "Purple Nebula", "Night Sky", "Pink Daylight", "Morning Glow", "Setting Sun" },
+    Default = 1,
+    Multi = false,
+    Text = "Custom Skybox",
+    Callback = function(Value)
+        if Toggles.CustomSky.Value then
+            applySkybox(Value)
+        end
+    end
+})
+
+ShadersGroup:AddToggle("CustomSky", {
+    Text = "Enable Custom Skybox",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            applySkybox(Options.Redshift.Value)
+        else
+            if customSkyboxInstance then
+                customSkyboxInstance:Destroy()
+                customSkyboxInstance = nil
+            end
+        end
+    end
+})
+
+-- --- BODY MATERIAL / CHAMS & DANCE ANIMATIONS ---
+local CharacterGroup = Tabs.Visuals:AddLeftGroupbox("Character Visuals")
+
+CharacterGroup:AddDropdown("bodymaterialdropdown", {
+    Values = { "Plastic", "Neon", "ForceField", "Glass", "SmoothPlastic" },
+    Default = 1,
+    Multi = false,
+    Text = "Body Material",
+    Callback = function(Value)
+        if Toggles.BodyMaterial.Value then
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and not part.Parent:IsA("Accessory") then
+                        part.Material = Enum.Material[Value]
+                    end
+                end
+            end
+        end
+    end
+})
+
+CharacterGroup:AddLabel("Body Material Color"):AddColorPicker("materialColor", {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = "Body Material Color",
+    Callback = function(Value)
+        if Toggles.BodyMaterial.Value then
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and not part.Parent:IsA("Accessory") then
+                        part.Color = Value
+                    end
+                end
+            end
+        end
+    end
+})
+
+CharacterGroup:AddToggle("BodyMaterial", {
+    Text = "Enable Body Chams",
+    Default = false,
+    Callback = function(Value)
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and not part.Parent:IsA("Accessory") then
+                    if Value then
+                        part.Material = Enum.Material[Options.bodymaterialdropdown.Value]
+                        part.Color = Options.materialColor.Value
+                    else
+                        part.Material = Enum.Material.SmoothPlastic
+                    end
+                end
+            end
+        end
+    end
+})
+
+-- Dance Animations List
+local danceAnimations = {}
+local animFolder = ReplicatedStorage:FindFirstChild("Animations") or workspace:FindFirstChild("Animations")
+if animFolder then
+    for _, child in pairs(animFolder:GetChildren()) do
+        if child:IsA("Folder") or child:IsA("Animation") then
+            table.insert(danceAnimations, child.Name)
+        end
+    end
+end
+
+if #danceAnimations > 0 then
+    CharacterGroup:AddDropdown("danceDropdown", {
+        Values = danceAnimations,
+        Default = 1,
+        Multi = false,
+        Text = "Custom Dance / Animation",
+        Callback = function(Value)
+            if currentTrack then currentTrack:Stop() end
+            if currentSound then currentSound:Destroy() end
+
+            local animObj = animFolder:FindFirstChild(Value)
+            if animObj then
+                local animId = animObj:GetAttribute("animationid") or (animObj:IsA("Animation") and animObj.AnimationId)
+                local char = LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum and animId then
+                    local anim = Instance.new("Animation")
+                    anim.AnimationId = animId
+                    currentTrack = hum:LoadAnimation(anim)
+                    currentTrack:Play()
+
+                    local song = animObj:FindFirstChild("Song")
+                    if song and song:IsA("Sound") then
+                        currentSound = song:Clone()
+                        currentSound.Parent = char.PrimaryPart or char:FindFirstChild("Head")
+                        currentSound:Play()
+                    end
+                end
+            end
+        end
+    })
+
+    CharacterGroup:AddButton({
+        Text = "Stop Dance",
+        Func = function()
+            if currentTrack then currentTrack:Stop() end
+            if currentSound then currentSound:Destroy() end
+        end
+    })
+end
+
+-- ============================================================================
+-- TAB 3: CREDITS & DISCORD
+-- ============================================================================
+
+local CreditsGroup = Tabs.Credits:AddLeftGroupbox("Credits")
+
+CreditsGroup:AddLabel("Made by TexRBLX\nViolence District Script v1.0.0", true)
+CreditsGroup:AddDivider()
+
+CreditsGroup:AddButton({
+    Text = "Copy Discord Invite",
+    Func = function()
+        if setclipboard then
+            setclipboard("https://discord.gg/38gFBKePFj")
+            Library:Notify({
+                Title = "Discord",
+                Description = "Copied Invite Link!",
+                Time = 3
+            })
+        end
+    end,
+    Tooltip = "Join the Discord server for updates & bug reports."
+})
+
+-- ============================================================================
+-- TAB 4: UI SETTINGS & CONFIG MANAGERS
+-- ============================================================================
+
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu")
+
+MenuGroup:AddButton({
+    Text = "Unload",
+    Func = function()
+        unloadScript()
+    end,
+    Tooltip = "Completely unloads the script, resets settings, and destroys GUI."
+})
+
+MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+    Default = "RightControl",
+    NoUI = true,
+    Text = "Menu keybind"
+})
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+ThemeManager:SetFolder("TexRBLX")
+SaveManager:SetFolder("TexRBLX/ViolenceDistrict")
+SaveManager:BuildConfigSection(Tabs["UI Settings"])
+ThemeManager:ApplyToTab(Tabs["UI Settings"])
+SaveManager:LoadAutoloadConfig()
+
+-- Notification on load
+Library:Notify({
+    Title = "Violence District",
+    Description = "Loaded successfully! Enjoy playing.",
+    Time = 4
+})
+
+print("[TexRBLX] Violence District script loaded successfully!")
