@@ -1,35 +1,25 @@
-# Script-sourse
+# Script Source Code
 
-**Open source codes for Roblox injectors that might help developers**
+**Open source code for scripts from various Roblox playstations that can help developers (beginners or those unfamiliar with the game's content)**
 
-This repository contains open source codes for Roblox injectors. All scripts have been removed from protection and may differ from the original versions. The project is intended for educational purposes and to assist developers.
-
----
-
-## ⚠️ Important Warning
-
-> **This project is for EDUCATIONAL PURPOSES ONLY.**
->
-> - Using injectors in Roblox may violate the platform's [Terms of Service](https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use).
-> - The author is not responsible for any damage, account bans, or other consequences resulting from the use of these codes.
-> - Please use this material responsibly and solely for learning about software mechanics.
-
----
-
-## 🚀 Getting Started
-
-These instructions will help you get a copy of the project and run it on your local machine for development and testing purposes.
+This repository contains open source code for Roblox scripts. All scripts have been deactivated and may differ from the original versions. This project is designed to help playstation developers.
 
 ### Prerequisites
 
 To work with the code, you will need:
 
-- Knowledge of the programming language (presumably Lua or C++, depending on the specific scripts).
-- A Roblox client environment to run the scripts.
-- Basic understanding of how injectors and process memory work.
+- Knowledge of a programming language (presumably Luau).
 
-### Installation
+- The Roblox client environment (injector) for running scripts.
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/vasul111/Script-sourse.git
+- A basic understanding of how scripts work.
+
+### Additional Requirements
+
+- If you use AI, use it with caution, as these are scripts (specifically cheats) and the AI ​​may refuse to develop them.
+
+- Scripts may be older versions, not updated.
+
+### Author
+
+- Automation should not handle scripts in any way.
