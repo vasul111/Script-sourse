@@ -4,6 +4,8 @@
 
 This repository contains open source code for Roblox scripts. All scripts have been deactivated and may differ from the original versions. This project is designed to help playstation developers.
 
+### Scripts will always be updated
+
 ### Prerequisites
 
 To work with the code, you will need:
