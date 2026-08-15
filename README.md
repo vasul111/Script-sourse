@@ -1,63 +1,35 @@
 # Script-sourse
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) <!-- Если укажете лицензию, замените ссылку -->
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
-
 **Open source codes for Roblox injectors that might help developers**
 
-Этот репозиторий содержит открытые исходные коды для инжекторов Roblox. Все скрипты были очищены от защитного кода и могут отличаться от оригинальных версий. Проект создан в образовательных целях и для помощи разработчикам.
+This repository contains open source codes for Roblox injectors. All scripts have been removed from protection and may differ from the original versions. The project is intended for educational purposes and to assist developers.
 
 ---
 
-## 📁 Содержание
+## ⚠️ Important Warning
 
-- [О проекте](#-о-проекте)
-- [Важное предупреждение](#-важное-предупреждение)
-- [Начало работы](#-начало-работы)
-- [Использование](#-использование)
-- [Структура репозитория](#-структура-репозитория)
-- [Внесение вклада](#-внесение-вклада)
-- [Лицензия](#-лицензия)
-- [Контакты](#-контакты)
-
----
-
-## ℹ️ О проекте
-
-**Script-sourse** — это коллекция исходных кодов для инжекторов в Roblox. Основные цели проекта:
-
-- Предоставить разработчикам примеры кода для изучения.
-- Показать, как работают инжекторы на базовом уровне.
-- Предложить очищенные версии скриптов для образовательного использования.
-
-**Важно:** Скрипты могут отличаться от оригинальных версий, так как были модифицированы для снятия защиты.
-
----
-
-## ⚠️ Важное предупреждение
-
-> **Этот проект предназначен ТОЛЬКО для образовательных целей.**
+> **This project is for EDUCATIONAL PURPOSES ONLY.**
 >
-> - Использование инжекторов в Roblox может нарушать [Условия использования](https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use) платформы.
-> - Автор не несет ответственности за любой ущерб, бан аккаунтов или другие последствия, возникшие в результате использования этих кодов.
-> - Пожалуйста, используйте этот материал ответственно и только для изучения принципов работы программного обеспечения.
+> - Using injectors in Roblox may violate the platform's [Terms of Service](https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use).
+> - The author is not responsible for any damage, account bans, or other consequences resulting from the use of these codes.
+> - Please use this material responsibly and solely for learning about software mechanics.
 
 ---
 
-## 🚀 Начало работы
+## 🚀 Getting Started
 
-Эти инструкции помогут вам получить копию проекта и запустить его на вашем локальном компьютере для разработки и тестирования.
+These instructions will help you get a copy of the project and run it on your local machine for development and testing purposes.
 
-### 📋 Необходимые условия
+### Prerequisites
 
-Для работы с кодом вам понадобится:
+To work with the code, you will need:
 
-- Знание языка программирования (предположительно, Lua или C++, в зависимости от конкретных скриптов).
-- Среда выполнения для скриптов Roblox (обычно это сам клиент Roblox).
-- Базовое понимание работы инжекторов и памяти процессов.
+- Knowledge of the programming language (presumably Lua or C++, depending on the specific scripts).
+- A Roblox client environment to run the scripts.
+- Basic understanding of how injectors and process memory work.
 
-### 🔧 Установка
+### Installation
 
-1.  Клонируйте репозиторий:
+1.  Clone the repository:
     ```bash
     git clone https://github.com/vasul111/Script-sourse.git
