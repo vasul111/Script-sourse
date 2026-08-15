@@ -1,0 +1,338 @@
+-- WhiteLotus AbsoluteDumper loader
+local BASE = "https://access.valkorym.com"
+local ROOT, DIR = "WhiteLotus", "WhiteLotus/AbsoluteDumper"
+local INSTALL, ACCESS = DIR .. "/install.json", DIR .. "/access.json"
+local env = getgenv and getgenv() or _G
+
+if env.WhiteLotusAbsoluteDumperLoading then
+    warn("[AbsoluteDumper] Already running")
+    return
+end
+env.WhiteLotusAbsoluteDumperLoading = true
+
+local function stage(text) print("[AbsoluteDumper] " .. text) end
+local function stop(text)
+    env.WhiteLotusAbsoluteDumperLoading = nil
+    warn("[AbsoluteDumper] " .. tostring(text))
+end
+
+stage("Checking compatibility")
+local syn = rawget(env, "syn") or rawget(_G, "syn")
+local http = rawget(env, "http") or rawget(_G, "http")
+local fluxus = rawget(env, "fluxus") or rawget(_G, "fluxus")
+local request, adapter
+for _, candidate in ipairs({
+    {"request", rawget(env, "request") or rawget(_G, "request")},
+    {"http_request", rawget(env, "http_request") or rawget(_G, "http_request")},
+    {"syn.request", syn and syn.request},
+    {"http.request", http and http.request},
+    {"fluxus.request", fluxus and fluxus.request},
+}) do
+    if type(candidate[2]) == "function" then
+        adapter, request = candidate[1], candidate[2]
+        break
+    end
+end
+local missing = {}
+local function need(name, value)
+    if type(value) ~= "function" then table.insert(missing, name) end
+end
+need("loadstring", loadstring)
+need("decompile", decompile)
+need("readfile", readfile)
+need("writefile", writefile)
+need("makefolder", makefolder)
+need("HTTP request", request)
+if type(getscripts) ~= "function" and type(getloadedmodules) ~= "function" and type(getnilinstances) ~= "function" then
+    table.insert(missing, "script discovery")
+end
+if #missing > 0 then
+    stop("Missing executor capabilities: " .. table.concat(missing, ", "))
+    return
+end
+
+local JSON = game:GetService("HttpService")
+local Input = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local function folder(path)
+    if type(isfolder) == "function" then
+        local ok, exists = pcall(isfolder, path)
+        if ok and exists then return true end
+    end
+    return pcall(makefolder, path)
+end
+if not folder(ROOT) or not folder(DIR) then stop("Unable to create workspace folder") return end
+
+local function encode(value)
+    local ok, result = pcall(JSON.JSONEncode, JSON, value)
+    return ok and result or nil
+end
+local function decode(value)
+    local ok, result = pcall(JSON.JSONDecode, JSON, value)
+    return ok and result or nil
+end
+local function read(path)
+    local ok, result = pcall(readfile, path)
+    return ok and result or nil
+end
+local function commit(path, value)
+    local temp = path .. ".tmp"
+    if not pcall(writefile, temp, value) or read(temp) ~= value then return false end
+    if not pcall(writefile, path, value) or read(path) ~= value then return false end
+    if type(delfile) == "function" then pcall(delfile, temp) end
+    return true
+end
+local function readJSON(path)
+    local value = read(path)
+    return value and decode(value) or nil
+end
+local function writeJSON(path, value)
+    local data = encode(value)
+    return data and commit(path, data) or false
+end
+
+local installation = readJSON(INSTALL)
+if type(installation) ~= "table" or type(installation.id) ~= "string" or #installation.id < 32 then
+    installation = {id = (JSON:GenerateGUID(false) .. JSON:GenerateGUID(false)):gsub("%-", "")}
+    if not writeJSON(INSTALL, installation) then stop("Unable to save installation") return end
+end
+
+local function capabilities()
+    local name, version = "Unknown", ""
+    local identify = rawget(env, "identifyexecutor") or rawget(_G, "identifyexecutor")
+        or rawget(env, "getexecutorname") or rawget(_G, "getexecutorname")
+    if type(identify) == "function" then
+        local ok, first, second = pcall(identify)
+        if ok then
+            if type(first) == "string" and first ~= "" then name = first end
+            if type(second) == "string" then version = second end
+        end
+    end
+    local platform = "Unknown"
+    local ok, value = pcall(function() return Input:GetPlatform() end)
+    if ok then platform = tostring(value):match("%.([%w_]+)$") or tostring(value) end
+    local fingerprint, supported = "", false
+    local gethwid = rawget(env, "gethwid") or rawget(_G, "gethwid")
+    if type(gethwid) == "function" then
+        ok, value = pcall(gethwid)
+        if ok and type(value) == "string" and #value >= 8 and #value <= 512 then
+            fingerprint, supported = value, true
+        end
+    end
+    return {
+        executor = name:sub(1, 64), version = version:sub(1, 64),
+        platform = platform:sub(1, 32), adapter = adapter or "unknown",
+        hwid = supported, fingerprint = fingerprint,
+    }
+end
+
+local function raw(path, value)
+    local body = encode(value)
+    if not body then return nil, "Unable to encode request", false end
+    local ok, response = pcall(request, {
+        Url = BASE .. path, Method = "POST",
+        Headers = {["Content-Type"] = "application/json", Accept = "application/json"}, Body = body,
+    })
+    if not ok or type(response) ~= "table" then return nil, "Network request failed", true end
+    local status = tonumber(response.StatusCode or response.Status or response.status_code or response.status)
+    if not status then return nil, "Invalid executor HTTP response", true end
+    return {status = status, body = response.Body or response.body or ""}, nil, false
+end
+local function post(path, value)
+    local response, err, network = raw(path, value)
+    if not response then return nil, err, network end
+    local result = decode(response.body)
+    if response.status < 200 or response.status >= 300 then
+        return nil, type(result) == "table" and result.error or ("HTTP " .. response.status), false
+    end
+    if type(result) ~= "table" then return nil, "Invalid server response", false end
+    return result, nil, false
+end
+
+local report = capabilities()
+local function access(key)
+    local response, err, network = raw("/api/access", {
+        install = installation.id,
+        key = type(key) == "string" and key or nil,
+        capability = report,
+    })
+    if not response then return nil, err, network end
+    if response.status >= 200 and response.status < 300 then
+        if response.body == "" then return nil, "Empty payload response", false end
+        return response.body, nil, false
+    end
+    local result = decode(response.body)
+    return nil, type(result) == "table" and result.error or ("HTTP " .. response.status), false
+end
+
+local function keyUI()
+    local connections, done = {}, Instance.new("BindableEvent")
+    local resolved, busy, link = false, false, ""
+    local gui = Instance.new("ScreenGui")
+    gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "WhiteLotusAccess", false, true
+    local parent = CoreGui
+    if type(gethui) == "function" then local ok, value = pcall(gethui) if ok and value then parent = value end end
+    if type(protectgui) == "function" then pcall(protectgui, gui) elseif syn and type(syn.protect_gui) == "function" then pcall(syn.protect_gui, gui) end
+    gui.Parent = parent
+    local ink = Color3.fromRGB(31, 30, 27)
+    local field = Color3.fromRGB(22, 21, 19)
+    local raised = Color3.fromRGB(42, 39, 35)
+    local line = Color3.fromRGB(67, 63, 57)
+    local clay = Color3.fromRGB(217, 119, 87)
+    local bone = Color3.fromRGB(242, 239, 231)
+    local muted = Color3.fromRGB(181, 175, 164)
+    local quiet = Color3.fromRGB(132, 126, 116)
+    local clipboard = rawget(env, "setclipboard") or rawget(_G, "setclipboard") or rawget(env, "toclipboard")
+    local function copyText(value)
+        if type(clipboard) ~= "function" then return false end
+        return pcall(clipboard, value)
+    end
+    local card = Instance.new("Frame")
+    card.AnchorPoint, card.Position, card.Size = Vector2.new(.5, .5), UDim2.fromScale(.5, .5), UDim2.new(.9, 0, 0, 402)
+    card.BackgroundColor3, card.BorderSizePixel, card.Parent = ink, 0, gui
+    local constraint = Instance.new("UISizeConstraint", card)
+    constraint.MinSize, constraint.MaxSize = Vector2.new(280, 402), Vector2.new(360, 402)
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 14)
+    local stroke = Instance.new("UIStroke", card) stroke.Color, stroke.Transparency = line, .25
+    local function round(item, radius, color)
+        Instance.new("UICorner", item).CornerRadius = UDim.new(0, radius)
+        if color then
+            local edge = Instance.new("UIStroke", item)
+            edge.Color, edge.Transparency = color, .25
+        end
+    end
+    local function pad(item, left, right)
+        local padding = Instance.new("UIPadding", item)
+        padding.PaddingLeft, padding.PaddingRight = UDim.new(0, left), UDim.new(0, right or left)
+    end
+    local function text(class, value, position, size, color)
+        local item = Instance.new(class)
+        item.Position, item.Size, item.BackgroundTransparency = position, size, class == "TextLabel" and 1 or 0
+        item.BackgroundColor3, item.BorderSizePixel = field, 0
+        item.Font, item.Text, item.TextSize = Enum.Font.Gotham, value, 13
+        item.TextColor3, item.Parent = color or bone, card
+        if class ~= "TextLabel" then round(item, 8, line) end
+        return item
+    end
+    local eyebrow = text("TextLabel", "WHITELOTUS  /  ACCESS", UDim2.fromOffset(20, 15), UDim2.new(1, -72, 0, 16), clay)
+    eyebrow.Font, eyebrow.TextSize, eyebrow.TextXAlignment = Enum.Font.GothamBold, 10, Enum.TextXAlignment.Left
+    local title = text("TextLabel", "AbsoluteDumper", UDim2.fromOffset(20, 35), UDim2.new(1, -72, 0, 30))
+    title.Font, title.TextSize, title.TextXAlignment = Enum.Font.GothamMedium, 21, Enum.TextXAlignment.Left
+    local close = text("TextButton", "×", UDim2.new(1, -48, 0, 17), UDim2.fromOffset(28, 28), muted)
+    close.TextSize, close.AutoButtonColor = 18, true
+    local status = text("TextLabel", "Create a link or enter an existing access key.", UDim2.fromOffset(20, 76), UDim2.new(1, -40, 0, 42), muted)
+    status.BackgroundTransparency, status.BackgroundColor3 = 0, raised
+    status.TextWrapped, status.TextXAlignment, status.TextYAlignment = true, Enum.TextXAlignment.Left, Enum.TextYAlignment.Center
+    round(status, 8, line) pad(status, 12)
+    local keyLabel = text("TextLabel", "ACCESS KEY", UDim2.fromOffset(20, 132), UDim2.new(1, -40, 0, 14), quiet)
+    keyLabel.Font, keyLabel.TextSize, keyLabel.TextXAlignment = Enum.Font.GothamBold, 10, Enum.TextXAlignment.Left
+    local key = text("TextBox", "", UDim2.fromOffset(20, 151), UDim2.new(1, -40, 0, 42))
+    key.PlaceholderText, key.PlaceholderColor3, key.ClearTextOnFocus = "WL-XXXXX-XXXXX-XXXXX-XXXXX", quiet, false
+    key.Font, key.TextSize, key.TextXAlignment = Enum.Font.Code, 12, Enum.TextXAlignment.Left
+    pad(key, 12)
+    local linkLabel = text("TextLabel", "LOOTLABS LINK", UDim2.fromOffset(20, 207), UDim2.new(1, -40, 0, 14), quiet)
+    linkLabel.Font, linkLabel.TextSize, linkLabel.TextXAlignment = Enum.Font.GothamBold, 10, Enum.TextXAlignment.Left
+    local urlBox = text("TextBox", "", UDim2.fromOffset(20, 226), UDim2.new(1, -40, 0, 38))
+    urlBox.PlaceholderText, urlBox.PlaceholderColor3 = "No link created yet", quiet
+    urlBox.ClearTextOnFocus, urlBox.TextSize, urlBox.TextXAlignment = false, 11, Enum.TextXAlignment.Left
+    urlBox.TextTruncate = Enum.TextTruncate.AtEnd
+    pad(urlBox, 12)
+    local function button(value, position, size, primary)
+        local item = text("TextButton", value, position, size, bone)
+        item.BackgroundColor3, item.Font = primary and clay or raised, Enum.Font.GothamSemibold
+        item.TextSize = 12
+        return item
+    end
+    local getKey = button("Get key", UDim2.fromOffset(20, 279), UDim2.new(.5, -26, 0, 36), false)
+    local copy = button("Copy link", UDim2.new(.5, 6, 0, 279), UDim2.new(.5, -26, 0, 36), false)
+    local verifyButton = button("Verify key", UDim2.fromOffset(20, 327), UDim2.new(1, -40, 0, 40), true)
+    local detail = text("TextLabel", "12-hour access  ·  bound to this installation", UDim2.fromOffset(20, 377), UDim2.new(1, -40, 0, 14), quiet)
+    detail.TextSize, detail.TextXAlignment = 10, Enum.TextXAlignment.Center
+    local buttons = {getKey, copy, verifyButton, close}
+    local function lock(value, message)
+        busy = value
+        for _, item in ipairs(buttons) do
+            item.Active, item.AutoButtonColor, item.TextTransparency = not value, not value, value and .45 or 0
+        end
+        if message then status.Text = message end
+    end
+    local function finish(value) if not resolved then resolved = true done:Fire(value) end end
+    table.insert(connections, close.MouseButton1Click:Connect(function() if not busy then finish(nil) end end))
+    table.insert(connections, getKey.MouseButton1Click:Connect(function()
+        if busy then return end lock(true, "Creating LootLabs session...")
+        task.spawn(function()
+            local result, err = post("/api/session", {install = installation.id})
+            if result then
+                link, urlBox.Text = result.url, result.url
+                if copyText(link) then
+                    status.Text = "Link copied. Complete LootLabs to receive your key."
+                else
+                    status.Text = "Link ready. Copy it, then complete LootLabs."
+                end
+            else status.Text = "Unable to create link: " .. tostring(err) end
+            lock(false)
+        end)
+    end))
+    table.insert(connections, copy.MouseButton1Click:Connect(function()
+        if busy then return end
+        if link == "" then status.Text = "Create a key link first."
+        elseif copyText(link) then status.Text = "Link copied."
+        else urlBox:CaptureFocus() status.Text = "Select the visible link." end
+    end))
+    table.insert(connections, verifyButton.MouseButton1Click:Connect(function()
+        if busy then return end
+        local value = key.Text:upper():match("^%s*(.-)%s*$")
+        if value == "" then status.Text = "Paste your key first." return end
+        lock(true, "Verifying key...")
+        task.spawn(function()
+            local source, err = access(value)
+            key.Text = ""
+            if source then
+                if not writeJSON(ACCESS, {key = value}) then
+                    status.Text = "Key accepted, but it could not be saved."
+                    lock(false)
+                    return
+                end
+                finish(source)
+            else
+                status.Text = "Verification failed: " .. tostring(err)
+                lock(false)
+            end
+        end)
+    end))
+    local dragging, dragStart, start
+    table.insert(connections, card.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging, dragStart, start = true, input.Position, card.Position
+            local changed
+            changed = input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false changed:Disconnect() end end)
+        end
+    end))
+    table.insert(connections, Input.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            card.Position = UDim2.new(start.X.Scale, start.X.Offset + delta.X, start.Y.Scale, start.Y.Offset + delta.Y)
+        end
+    end))
+    local result = done.Event:Wait()
+    for _, connection in ipairs(connections) do connection:Disconnect() end
+    done:Destroy() gui:Destroy()
+    return result
+end
+
+stage("Contacting access service")
+local saved = readJSON(ACCESS)
+local source, err = access(type(saved) == "table" and saved.key or nil)
+if not source and (err == "key_required" or err == "invalid_key" or err == "expired_key") then
+    writeJSON(ACCESS, {})
+    stage("Key required")
+    source = keyUI()
+    if not source then stop("Access window closed") return end
+end
+if not source then stop("Access check failed: " .. tostring(err)) return end
+stage("Starting AbsoluteDumper")
+local fn, compileError = loadstring(source)
+if not fn then stop("Payload compilation failed: " .. tostring(compileError)) return end
+env.WhiteLotusAbsoluteDumperLoading = nil
+local ok, runtimeError = pcall(fn)
+if not ok then warn("[AbsoluteDumper] Payload error: " .. tostring(runtimeError)) end
