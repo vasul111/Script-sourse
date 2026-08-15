@@ -1,0 +1,1215 @@
+--[[
+    SteamyUI Library v1.0.0
+    Deobfuscated & Cleaned from Gemini or Baza
+--]]
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer and LocalPlayer:GetMouse() or nil
+
+local SteamyUI = {
+    Version = "1.0.0",
+    Windows = {},
+    CurrentTheme = "Darker"
+}
+
+-- Theme Definitions
+local Themes = {
+    ["Darker"] = {
+        Background = Color3.fromRGB(15, 15, 16),
+        SecondaryBackground = Color3.fromRGB(22, 22, 24),
+        Card = Color3.fromRGB(28, 28, 30),
+        Border = Color3.fromRGB(40, 40, 45),
+        Stroke = Color3.fromRGB(50, 50, 55),
+        Text = Color3.fromRGB(240, 240, 240),
+        SubText = Color3.fromRGB(160, 160, 160),
+        Accent = Color3.fromRGB(0, 212, 120),
+        Success = Color3.fromRGB(16, 124, 65),
+        Warning = Color3.fromRGB(220, 140, 0),
+        Error = Color3.fromRGB(232, 17, 35),
+        Notification = Color3.fromRGB(25, 25, 27)
+    },
+    ["Dark"] = {
+        Background = Color3.fromRGB(28, 28, 30),
+        SecondaryBackground = Color3.fromRGB(36, 36, 38),
+        Card = Color3.fromRGB(44, 44, 46),
+        Border = Color3.fromRGB(55, 55, 59),
+        Stroke = Color3.fromRGB(65, 65, 70),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(170, 170, 170),
+        Accent = Color3.fromRGB(0, 212, 120),
+        Success = Color3.fromRGB(16, 124, 65),
+        Warning = Color3.fromRGB(220, 140, 0),
+        Error = Color3.fromRGB(232, 17, 35),
+        Notification = Color3.fromRGB(40, 40, 42)
+    },
+    ["Darker Purple Neon"] = {
+        Background = Color3.fromRGB(14, 8, 22),
+        SecondaryBackground = Color3.fromRGB(20, 12, 32),
+        Card = Color3.fromRGB(28, 18, 45),
+        Border = Color3.fromRGB(40, 25, 65),
+        Stroke = Color3.fromRGB(55, 35, 90),
+        Text = Color3.fromRGB(255, 230, 255),
+        SubText = Color3.fromRGB(180, 130, 200),
+        Accent = Color3.fromRGB(240, 0, 255),
+        Success = Color3.fromRGB(0, 255, 170),
+        Warning = Color3.fromRGB(255, 185, 0),
+        Error = Color3.fromRGB(255, 20, 100),
+        Notification = Color3.fromRGB(22, 14, 35)
+    },
+    ["Amethyst"] = {
+        Background = Color3.fromRGB(20, 15, 30),
+        SecondaryBackground = Color3.fromRGB(28, 22, 42),
+        Card = Color3.fromRGB(38, 30, 58),
+        Border = Color3.fromRGB(50, 40, 75),
+        Stroke = Color3.fromRGB(65, 50, 100),
+        Text = Color3.fromRGB(245, 240, 255),
+        SubText = Color3.fromRGB(180, 160, 200),
+        Accent = Color3.fromRGB(155, 93, 229),
+        Success = Color3.fromRGB(46, 196, 182),
+        Warning = Color3.fromRGB(255, 159, 67),
+        Error = Color3.fromRGB(240, 113, 120),
+        Notification = Color3.fromRGB(32, 26, 48)
+    },
+    ["Light"] = {
+        Background = Color3.fromRGB(243, 243, 243),
+        SecondaryBackground = Color3.fromRGB(255, 255, 255),
+        Card = Color3.fromRGB(249, 249, 249),
+        Border = Color3.fromRGB(210, 210, 210),
+        Stroke = Color3.fromRGB(225, 225, 225),
+        Text = Color3.fromRGB(20, 20, 20),
+        SubText = Color3.fromRGB(100, 100, 100),
+        Accent = Color3.fromRGB(0, 212, 120),
+        Success = Color3.fromRGB(16, 124, 65),
+        Warning = Color3.fromRGB(220, 140, 0),
+        Error = Color3.fromRGB(232, 17, 35),
+        Notification = Color3.fromRGB(255, 255, 255)
+    },
+    ["Light Cyan Neon"] = {
+        Background = Color3.fromRGB(235, 248, 250),
+        SecondaryBackground = Color3.fromRGB(255, 255, 255),
+        Card = Color3.fromRGB(245, 252, 253),
+        Border = Color3.fromRGB(190, 225, 230),
+        Stroke = Color3.fromRGB(210, 240, 245),
+        Text = Color3.fromRGB(15, 30, 35),
+        SubText = Color3.fromRGB(90, 120, 130),
+        Accent = Color3.fromRGB(0, 180, 200),
+        Success = Color3.fromRGB(0, 168, 90),
+        Warning = Color3.fromRGB(224, 128, 0),
+        Error = Color3.fromRGB(216, 16, 48),
+        Notification = Color3.fromRGB(255, 255, 255)
+    },
+    ["Aqua"] = {
+        Background = Color3.fromRGB(10, 25, 30),
+        SecondaryBackground = Color3.fromRGB(15, 35, 43),
+        Card = Color3.fromRGB(22, 45, 55),
+        Border = Color3.fromRGB(30, 60, 75),
+        Stroke = Color3.fromRGB(40, 80, 100),
+        Text = Color3.fromRGB(240, 248, 255),
+        SubText = Color3.fromRGB(150, 180, 195),
+        Accent = Color3.fromRGB(0, 180, 216),
+        Success = Color3.fromRGB(0, 200, 115),
+        Warning = Color3.fromRGB(244, 162, 97),
+        Error = Color3.fromRGB(230, 57, 70),
+        Notification = Color3.fromRGB(18, 40, 50)
+    },
+    ["Darker Blue Neon"] = {
+        Background = Color3.fromRGB(10, 12, 22),
+        SecondaryBackground = Color3.fromRGB(15, 18, 32),
+        Card = Color3.fromRGB(20, 24, 42),
+        Border = Color3.fromRGB(28, 35, 60),
+        Stroke = Color3.fromRGB(40, 50, 85),
+        Text = Color3.fromRGB(230, 240, 255),
+        SubText = Color3.fromRGB(130, 150, 190),
+        Accent = Color3.fromRGB(0, 245, 255),
+        Success = Color3.fromRGB(0, 255, 136),
+        Warning = Color3.fromRGB(255, 170, 0),
+        Error = Color3.fromRGB(255, 0, 85),
+        Notification = Color3.fromRGB(16, 20, 36)
+    }
+}
+
+-- Icons Library
+local Icons = {
+    ["home"] = "🏠",
+    ["globe"] = "🌐",
+    ["file"] = "📄",
+    ["eye"] = "👁",
+    ["key"] = "🔑",
+    ["database"] = "🗄",
+    ["chevron-left"] = "‹",
+    ["chevron-right"] = "›",
+    ["chevron-down"] = "˅",
+    ["chevron-up"] = "˄",
+    ["link"] = "🔗",
+    ["refresh"] = "↺",
+    ["menu"] = "☰",
+    ["search"] = "🔍",
+    ["settings"] = "⚙️",
+    ["user"] = "👤",
+    ["check"] = "✓",
+    ["cross"] = "✕",
+    ["bell"] = "🔔",
+    ["shield"] = "🛡️",
+    ["sword"] = "⚔️",
+    ["heart"] = "❤️",
+    ["star"] = "⭐",
+    ["fire"] = "🔥",
+    ["zap"] = "⚡",
+    ["coffee"] = "☕",
+    ["steam"] = "♨️"
+}
+
+SteamyUI.Icons = Icons
+
+-- Theme Manager
+local ThemeManager = {
+    Themes = Themes,
+    CurrentTheme = "Darker",
+    Registry = {}
+}
+
+function ThemeManager:GetColor(name, themeName)
+    local theme = Themes[themeName or self.CurrentTheme] or Themes["Darker"]
+    return theme[name] or Color3.fromRGB(255, 255, 255)
+end
+
+function ThemeManager:Register(instance, property, colorName)
+    table.insert(self.Registry, {
+        Instance = instance,
+        Property = property,
+        ColorName = colorName
+    })
+    instance[property] = self:GetColor(colorName)
+end
+
+function ThemeManager:Unregister(instance)
+    for i = #self.Registry, 1, -1 do
+        if self.Registry[i].Instance == instance then
+            table.remove(self.Registry, i)
+        end
+    end
+end
+
+function ThemeManager:SetTheme(themeName)
+    if not Themes[themeName] then return end
+    self.CurrentTheme = themeName
+    SteamyUI.CurrentTheme = themeName
+
+    for _, entry in ipairs(self.Registry) do
+        if entry.Instance and entry.Instance.Parent then
+            local targetColor = self:GetColor(entry.ColorName, themeName)
+            TweenService:Create(entry.Instance, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                [entry.Property] = targetColor
+            }):Play()
+        end
+    end
+end
+
+SteamyUI.ThemeManager = ThemeManager
+
+-- Helper Utilities
+local function Create(className, properties, children)
+    local inst = Instance.new(className)
+    for k, v in pairs(properties or {}) do
+        inst[k] = v
+    end
+    for _, child in ipairs(children or {}) do
+        child.Parent = inst
+    end
+    return inst
+end
+
+local function MakeDraggable(topbar, mainFrame)
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+
+    topbar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    topbar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- Notifications System
+function SteamyUI:Notify(options)
+    local Title = options.Title or "Notification"
+    local Content = options.Content or options.Description or ""
+    local Duration = options.Duration or 4
+    local Type = options.Type or "Info"
+    
+    local parentGui = game:GetService("CoreGui"):FindFirstChild("SteamyUINotifications")
+    if not parentGui then
+        parentGui = Create("ScreenGui", {
+            Name = "SteamyUINotifications",
+            ResetOnSpawn = false,
+            ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+            Parent = (gethui and gethui()) or game:GetService("CoreGui")
+        })
+    end
+
+    local notifFrame = Create("Frame", {
+        Name = "Notification",
+        Size = UDim2.new(0, 280, 0, 70),
+        Position = UDim2.new(1, 300, 1, -80),
+        BackgroundColor3 = ThemeManager:GetColor("Notification"),
+        BorderSizePixel = 0,
+        Parent = parentGui
+    }, {
+        Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
+        Create("UIStroke", {
+            Color = ThemeManager:GetColor("Border"),
+            Thickness = 1
+        })
+    })
+
+    local titleLbl = Create("TextLabel", {
+        Text = Title,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        TextColor3 = ThemeManager:GetColor("Text"),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Position = UDim2.new(0, 14, 0, 10),
+        Size = UDim2.new(1, -28, 0, 18),
+        BackgroundTransparency = 1,
+        Parent = notifFrame
+    })
+
+    local descLbl = Create("TextLabel", {
+        Text = Content,
+        Font = Enum.Font.Gotham,
+        TextSize = 12,
+        TextColor3 = ThemeManager:GetColor("SubText"),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
+        Position = UDim2.new(0, 14, 0, 30),
+        Size = UDim2.new(1, -28, 0, 30),
+        BackgroundTransparency = 1,
+        Parent = notifFrame
+    })
+
+    local targetPos = UDim2.new(1, -300, 1, -80)
+    TweenService:Create(notifFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = targetPos }):Play()
+
+    task.delay(Duration, function()
+        local closeTween = TweenService:Create(notifFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Position = UDim2.new(1, 300, 1, -80) })
+        closeTween:Play()
+        closeTween.Completed:Connect(function()
+            notifFrame:Destroy()
+        end)
+    end)
+end
+
+-- Window Creation
+function SteamyUI:CreateWindow(options)
+    options = options or {}
+    local Title = options.Title or "Steamy Hub"
+    local SubTitle = options.SubTitle or "steamy.my.id"
+    local Logo = options.Logo or "♨️"
+    local LogoColor = options.LogoColor or ThemeManager:GetColor("Accent")
+    local Theme = options.Theme or "Darker"
+    local Size = options.Size or UDim2.new(0, 580, 0, 430)
+    local Folder = options.Folder or "Steamy"
+    local KeySystem = options.KeySystem or false
+    local KeySettings = options.KeySettings or {}
+
+    ThemeManager.CurrentTheme = Theme
+    SteamyUI.CurrentTheme = Theme
+
+    local Window = {
+        Tabs = {},
+        ActiveTab = nil,
+        KeyValidated = not KeySystem
+    }
+
+    local ScreenGui = Create("ScreenGui", {
+        Name = "SteamyUI_" .. Title,
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        Parent = (gethui and gethui()) or game:GetService("CoreGui")
+    })
+    Window.ScreenGui = ScreenGui
+
+    -- Main Window Frame
+    local MainFrame = Create("Frame", {
+        Name = "MainFrame",
+        Size = Size,
+        Position = UDim2.new(0.5, -Size.X.Offset / 2, 0.5, -Size.Y.Offset / 2),
+        BackgroundColor3 = ThemeManager:GetColor("Background"),
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        Parent = ScreenGui
+    }, {
+        Create("UICorner", { CornerRadius = UDim.new(0, 10) }),
+        Create("UIStroke", {
+            Color = ThemeManager:GetColor("Stroke"),
+            Thickness = 1
+        })
+    })
+    ThemeManager:Register(MainFrame, "BackgroundColor3", "Background")
+    Window.MainFrame = MainFrame
+
+    -- Topbar
+    local Topbar = Create("Frame", {
+        Name = "Topbar",
+        Size = UDim2.new(1, 0, 0, 45),
+        BackgroundColor3 = ThemeManager:GetColor("SecondaryBackground"),
+        BorderSizePixel = 0,
+        Parent = MainFrame
+    }, {
+        Create("UICorner", { CornerRadius = UDim.new(0, 10) })
+    })
+    ThemeManager:Register(Topbar, "BackgroundColor3", "SecondaryBackground")
+    MakeDraggable(Topbar, MainFrame)
+
+    -- Topbar Logo & Title
+    local LogoLabel = Create("TextLabel", {
+        Text = Logo,
+        Font = Enum.Font.GothamBold,
+        TextSize = 18,
+        TextColor3 = typeof(LogoColor) == "string" and Color3.fromHex(LogoColor) or LogoColor,
+        Size = UDim2.new(0, 30, 1, 0),
+        Position = UDim2.new(0, 12, 0, 0),
+        BackgroundTransparency = 1,
+        Parent = Topbar
+    })
+
+    local TitleLabel = Create("TextLabel", {
+        Text = Title,
+        Font = Enum.Font.GothamBold,
+        TextSize = 15,
+        TextColor3 = ThemeManager:GetColor("Text"),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(0, 200, 0, 20),
+        Position = UDim2.new(0, 44, 0, 6),
+        BackgroundTransparency = 1,
+        Parent = Topbar
+    })
+    ThemeManager:Register(TitleLabel, "TextColor3", "Text")
+
+    local SubTitleLabel = Create("TextLabel", {
+        Text = SubTitle,
+        Font = Enum.Font.Gotham,
+        TextSize = 11,
+        TextColor3 = ThemeManager:GetColor("SubText"),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(0, 200, 0, 14),
+        Position = UDim2.new(0, 44, 0, 24),
+        BackgroundTransparency = 1,
+        Parent = Topbar
+    })
+    ThemeManager:Register(SubTitleLabel, "TextColor3", "SubText")
+
+    -- Close Button
+    local CloseBtn = Create("TextButton", {
+        Text = "✕",
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        TextColor3 = ThemeManager:GetColor("SubText"),
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -38, 0, 8),
+        BackgroundTransparency = 1,
+        Parent = Topbar
+    })
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+    end)
+
+    -- Sidebar Container (Tabs list)
+    local Sidebar = Create("ScrollingFrame", {
+        Name = "Sidebar",
+        Size = UDim2.new(0, 140, 1, -55),
+        Position = UDim2.new(0, 10, 0, 50),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 0,
+        BorderSizePixel = 0,
+        Parent = MainFrame
+    }, {
+        Create("UIListLayout", {
+            Padding = UDim.new(0, 6),
+            SortOrder = Enum.SortOrder.LayoutOrder
+        })
+    })
+
+    -- Content Container (Tab pages)
+    local ContentContainer = Create("Frame", {
+        Name = "ContentContainer",
+        Size = UDim2.new(1, -165, 1, -55),
+        Position = UDim2.new(0, 155, 0, 50),
+        BackgroundColor3 = ThemeManager:GetColor("SecondaryBackground"),
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        Parent = MainFrame
+    }, {
+        Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
+        Create("UIStroke", { Color = ThemeManager:GetColor("Border"), Thickness = 1 })
+    })
+    ThemeManager:Register(ContentContainer, "BackgroundColor3", "SecondaryBackground")
+
+    -- Tab Creation Method
+    function Window:CreateTab(name, iconName)
+        local Tab = {
+            Name = name,
+            Sections = {},
+            Elements = {}
+        }
+
+        local icon = Icons[iconName] or iconName or "📄"
+
+        -- Tab Button in Sidebar
+        local TabBtn = Create("TextButton", {
+            Name = name .. "Tab",
+            Size = UDim2.new(1, 0, 0, 34),
+            BackgroundColor3 = ThemeManager:GetColor("Card"),
+            BackgroundTransparency = 1,
+            Text = "",
+            Parent = Sidebar
+        }, {
+            Create("UICorner", { CornerRadius = UDim.new(0, 6) })
+        })
+
+        local TabIcon = Create("TextLabel", {
+            Text = icon,
+            Font = Enum.Font.Gotham,
+            TextSize = 14,
+            Size = UDim2.new(0, 24, 1, 0),
+            Position = UDim2.new(0, 8, 0, 0),
+            BackgroundTransparency = 1,
+            TextColor3 = ThemeManager:GetColor("SubText"),
+            Parent = TabBtn
+        })
+
+        local TabText = Create("TextLabel", {
+            Text = name,
+            Font = Enum.Font.GothamMedium,
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1, -38, 1, 0),
+            Position = UDim2.new(0, 34, 0, 0),
+            BackgroundTransparency = 1,
+            TextColor3 = ThemeManager:GetColor("SubText"),
+            Parent = TabBtn
+        })
+
+        -- Tab Content ScrollFrame
+        local TabContent = Create("ScrollingFrame", {
+            Name = name .. "Content",
+            Size = UDim2.new(1, -12, 1, -12),
+            Position = UDim2.new(0, 6, 0, 6),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 3,
+            ScrollBarImageColor3 = ThemeManager:GetColor("Stroke"),
+            Visible = false,
+            Parent = ContentContainer
+        }, {
+            Create("UIListLayout", {
+                Padding = UDim.new(0, 8),
+                SortOrder = Enum.SortOrder.LayoutOrder
+            }),
+            Create("UIPadding", {
+                PaddingTop = UDim.new(0, 4),
+                PaddingBottom = UDim.new(0, 4),
+                PaddingLeft = UDim.new(0, 4),
+                PaddingRight = UDim.new(0, 6)
+            })
+        })
+        Tab.Container = TabContent
+
+        local function SelectTab()
+            for _, t in ipairs(Window.Tabs) do
+                t.Container.Visible = false
+                t.TabBtn.BackgroundTransparency = 1
+                t.TabText.TextColor3 = ThemeManager:GetColor("SubText")
+                t.TabIcon.TextColor3 = ThemeManager:GetColor("SubText")
+            end
+
+            TabContent.Visible = true
+            TabBtn.BackgroundTransparency = 0
+            TabBtn.BackgroundColor3 = ThemeManager:GetColor("Card")
+            TabText.TextColor3 = ThemeManager:GetColor("Text")
+            TabIcon.TextColor3 = ThemeManager:GetColor("Accent")
+            Window.ActiveTab = Tab
+        end
+
+        TabBtn.MouseButton1Click:Connect(SelectTab)
+        Tab.TabBtn = TabBtn
+        Tab.TabText = TabText
+        Tab.TabIcon = TabIcon
+
+        table.insert(Window.Tabs, Tab)
+        if #Window.Tabs == 1 then
+            SelectTab()
+        end
+
+        -- Component: Button
+        function Tab:CreateButton(opts)
+            opts = opts or {}
+            local btnName = opts.Name or opts.Title or "Button"
+            local callback = opts.Callback or function() end
+
+            local ButtonFrame = Create("TextButton", {
+                Name = btnName .. "_Button",
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = ThemeManager:GetColor("Card"),
+                BorderSizePixel = 0,
+                Text = "",
+                Parent = TabContent
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+                Create("UIStroke", { Color = ThemeManager:GetColor("Stroke"), Thickness = 1 }),
+                Create("TextLabel", {
+                    Text = btnName,
+                    Font = Enum.Font.GothamMedium,
+                    TextSize = 13,
+                    TextColor3 = ThemeManager:GetColor("Text"),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Size = UDim2.new(1, -20, 1, 0),
+                    Position = UDim2.new(0, 10, 0, 0),
+                    BackgroundTransparency = 1
+                })
+            })
+            ThemeManager:Register(ButtonFrame, "BackgroundColor3", "Card")
+
+            ButtonFrame.MouseButton1Click:Connect(function()
+                TweenService:Create(ButtonFrame, TweenInfo.new(0.1), { BackgroundColor3 = ThemeManager:GetColor("Stroke") }):Play()
+                task.delay(0.1, function()
+                    TweenService:Create(ButtonFrame, TweenInfo.new(0.1), { BackgroundColor3 = ThemeManager:GetColor("Card") }):Play()
+                end)
+                pcall(callback)
+            end)
+
+            return ButtonFrame
+        end
+        Tab.AddButton = Tab.CreateButton
+
+        -- Component: Toggle
+        function Tab:CreateToggle(opts)
+            opts = opts or {}
+            local toggleName = opts.Name or opts.Title or "Toggle"
+            local default = opts.Default or false
+            local callback = opts.Callback or function() end
+            local state = default
+
+            local ToggleFrame = Create("Frame", {
+                Name = toggleName .. "_Toggle",
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = ThemeManager:GetColor("Card"),
+                BorderSizePixel = 0,
+                Parent = TabContent
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+                Create("UIStroke", { Color = ThemeManager:GetColor("Stroke"), Thickness = 1 }),
+                Create("TextLabel", {
+                    Text = toggleName,
+                    Font = Enum.Font.GothamMedium,
+                    TextSize = 13,
+                    TextColor3 = ThemeManager:GetColor("Text"),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Size = UDim2.new(1, -50, 1, 0),
+                    Position = UDim2.new(0, 10, 0, 0),
+                    BackgroundTransparency = 1
+                })
+            })
+            ThemeManager:Register(ToggleFrame, "BackgroundColor3", "Card")
+
+            local SwitchTrack = Create("Frame", {
+                Size = UDim2.new(0, 36, 0, 18),
+                Position = UDim2.new(1, -44, 0.5, -9),
+                BackgroundColor3 = state and ThemeManager:GetColor("Accent") or ThemeManager:GetColor("Stroke"),
+                BorderSizePixel = 0,
+                Parent = ToggleFrame
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(1, 0) })
+            })
+
+            local SwitchKnob = Create("Frame", {
+                Size = UDim2.new(0, 14, 0, 14),
+                Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BorderSizePixel = 0,
+                Parent = SwitchTrack
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(1, 0) })
+            })
+
+            local function SetState(val)
+                state = val
+                local trackColor = state and ThemeManager:GetColor("Accent") or ThemeManager:GetColor("Stroke")
+                local knobPos = state and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+                
+                TweenService:Create(SwitchTrack, TweenInfo.new(0.2), { BackgroundColor3 = trackColor }):Play()
+                TweenService:Create(SwitchKnob, TweenInfo.new(0.2), { Position = knobPos }):Play()
+                pcall(callback, state)
+            end
+
+            local ClickArea = Create("TextButton", {
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundTransparency = 1,
+                Text = "",
+                Parent = ToggleFrame
+            })
+            ClickArea.MouseButton1Click:Connect(function()
+                SetState(not state)
+            end)
+
+            return {
+                Set = SetState,
+                Value = state
+            }
+        end
+        Tab.AddToggle = Tab.CreateToggle
+
+        -- Component: Slider
+        function Tab:CreateSlider(opts)
+            opts = opts or {}
+            local sliderName = opts.Name or opts.Title or "Slider"
+            local min = opts.Min or opts.Minimum or 0
+            local max = opts.Max or opts.Maximum or 100
+            local default = opts.Default or min
+            local increment = opts.Increment or 1
+            local callback = opts.Callback or function() end
+            local value = default
+
+            local SliderFrame = Create("Frame", {
+                Name = sliderName .. "_Slider",
+                Size = UDim2.new(1, 0, 0, 48),
+                BackgroundColor3 = ThemeManager:GetColor("Card"),
+                BorderSizePixel = 0,
+                Parent = TabContent
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+                Create("UIStroke", { Color = ThemeManager:GetColor("Stroke"), Thickness = 1 })
+            })
+            ThemeManager:Register(SliderFrame, "BackgroundColor3", "Card")
+
+            local TitleLbl = Create("TextLabel", {
+                Text = sliderName,
+                Font = Enum.Font.GothamMedium,
+                TextSize = 13,
+                TextColor3 = ThemeManager:GetColor("Text"),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Position = UDim2.new(0, 10, 0, 6),
+                Size = UDim2.new(1, -60, 0, 18),
+                BackgroundTransparency = 1,
+                Parent = SliderFrame
+            })
+
+            local ValueLbl = Create("TextLabel", {
+                Text = tostring(value),
+                Font = Enum.Font.Gotham,
+                TextSize = 12,
+                TextColor3 = ThemeManager:GetColor("SubText"),
+                TextXAlignment = Enum.TextXAlignment.Right,
+                Position = UDim2.new(1, -50, 0, 6),
+                Size = UDim2.new(0, 40, 0, 18),
+                BackgroundTransparency = 1,
+                Parent = SliderFrame
+            })
+
+            local SliderBar = Create("Frame", {
+                Size = UDim2.new(1, -20, 0, 6),
+                Position = UDim2.new(0, 10, 0, 32),
+                BackgroundColor3 = ThemeManager:GetColor("Stroke"),
+                BorderSizePixel = 0,
+                Parent = SliderFrame
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(1, 0) })
+            })
+
+            local SliderFill = Create("Frame", {
+                Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
+                BackgroundColor3 = ThemeManager:GetColor("Accent"),
+                BorderSizePixel = 0,
+                Parent = SliderBar
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(1, 0) })
+            })
+            ThemeManager:Register(SliderFill, "BackgroundColor3", "Accent")
+
+            local sliding = false
+            local function UpdateSlide(input)
+                local pos = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
+                local exactVal = min + (max - min) * pos
+                local snappedVal = math.floor(exactVal / increment + 0.5) * increment
+                value = math.clamp(snappedVal, min, max)
+
+                ValueLbl.Text = tostring(value)
+                SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+                pcall(callback, value)
+            end
+
+            SliderBar.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    sliding = true
+                    UpdateSlide(input)
+                end
+            end)
+
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    sliding = false
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    UpdateSlide(input)
+                end
+            end)
+
+            return {
+                Set = function(val)
+                    value = math.clamp(val, min, max)
+                    ValueLbl.Text = tostring(value)
+                    SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+                    pcall(callback, value)
+                end,
+                Value = value
+            }
+        end
+        Tab.AddSlider = Tab.CreateSlider
+
+        -- Component: Dropdown
+        function Tab:CreateDropdown(opts)
+            opts = opts or {}
+            local dropName = opts.Name or opts.Title or "Dropdown"
+            local optionsList = opts.Options or {}
+            local default = opts.Default or optionsList[1] or ""
+            local callback = opts.Callback or function() end
+            local selected = default
+            local open = false
+
+            local DropFrame = Create("Frame", {
+                Name = dropName .. "_Dropdown",
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = ThemeManager:GetColor("Card"),
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+                Parent = TabContent
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+                Create("UIStroke", { Color = ThemeManager:GetColor("Stroke"), Thickness = 1 })
+            })
+            ThemeManager:Register(DropFrame, "BackgroundColor3", "Card")
+
+            local DropHeader = Create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundTransparency = 1,
+                Text = "",
+                Parent = DropFrame
+            })
+
+            local TitleLbl = Create("TextLabel", {
+                Text = dropName .. ": " .. tostring(selected),
+                Font = Enum.Font.GothamMedium,
+                TextSize = 13,
+                TextColor3 = ThemeManager:GetColor("Text"),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Position = UDim2.new(0, 10, 0, 0),
+                Size = UDim2.new(1, -40, 1, 0),
+                BackgroundTransparency = 1,
+                Parent = DropHeader
+            })
+
+            local ArrowLbl = Create("TextLabel", {
+                Text = "˅",
+                Font = Enum.Font.GothamBold,
+                TextSize = 14,
+                TextColor3 = ThemeManager:GetColor("SubText"),
+                Position = UDim2.new(1, -30, 0, 0),
+                Size = UDim2.new(0, 20, 1, 0),
+                BackgroundTransparency = 1,
+                Parent = DropHeader
+            })
+
+            local OptionContainer = Create("Frame", {
+                Size = UDim2.new(1, -10, 0, #optionsList * 28),
+                Position = UDim2.new(0, 5, 0, 38),
+                BackgroundTransparency = 1,
+                Parent = DropFrame
+            }, {
+                Create("UIListLayout", { Padding = UDim.new(0, 2) })
+            })
+
+            local function RefreshOptions()
+                for _, child in ipairs(OptionContainer:GetChildren()) do
+                    if child:IsA("TextButton") then child:Destroy() end
+                end
+
+                for _, opt in ipairs(optionsList) do
+                    local OptBtn = Create("TextButton", {
+                        Size = UDim2.new(1, 0, 0, 26),
+                        BackgroundColor3 = ThemeManager:GetColor("SecondaryBackground"),
+                        Text = tostring(opt),
+                        Font = Enum.Font.Gotham,
+                        TextSize = 12,
+                        TextColor3 = opt == selected and ThemeManager:GetColor("Accent") or ThemeManager:GetColor("SubText"),
+                        Parent = OptionContainer
+                    }, {
+                        Create("UICorner", { CornerRadius = UDim.new(0, 4) })
+                    })
+
+                    OptBtn.MouseButton1Click:Connect(function()
+                        selected = opt
+                        TitleLbl.Text = dropName .. ": " .. tostring(selected)
+                        open = false
+                        ArrowLbl.Text = "˅"
+                        TweenService:Create(DropFrame, TweenInfo.new(0.2), { Size = UDim2.new(1, 0, 0, 36) }):Play()
+                        RefreshOptions()
+                        pcall(callback, selected)
+                    end)
+                end
+            end
+
+            DropHeader.MouseButton1Click:Connect(function()
+                open = not open
+                ArrowLbl.Text = open and "˄" or "˅"
+                local targetHeight = open and (40 + #optionsList * 28) or 36
+                TweenService:Create(DropFrame, TweenInfo.new(0.2), { Size = UDim2.new(1, 0, 0, targetHeight) }):Play()
+            end)
+
+            RefreshOptions()
+
+            return {
+                Set = function(val)
+                    selected = val
+                    TitleLbl.Text = dropName .. ": " .. tostring(selected)
+                    RefreshOptions()
+                    pcall(callback, selected)
+                end,
+                Refresh = function(newOpts)
+                    optionsList = newOpts or {}
+                    OptionContainer.Size = UDim2.new(1, -10, 0, #optionsList * 28)
+                    RefreshOptions()
+                end,
+                Value = selected
+            }
+        end
+        Tab.AddDropdown = Tab.CreateDropdown
+
+        -- Component: Input (Textbox)
+        function Tab:CreateInput(opts)
+            opts = opts or {}
+            local inputName = opts.Name or opts.Title or "Input"
+            local placeholder = opts.PlaceholderText or opts.Placeholder or "Type here..."
+            local callback = opts.Callback or function() end
+
+            local InputFrame = Create("Frame", {
+                Name = inputName .. "_Input",
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = ThemeManager:GetColor("Card"),
+                BorderSizePixel = 0,
+                Parent = TabContent
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+                Create("UIStroke", { Color = ThemeManager:GetColor("Stroke"), Thickness = 1 }),
+                Create("TextLabel", {
+                    Text = inputName,
+                    Font = Enum.Font.GothamMedium,
+                    TextSize = 13,
+                    TextColor3 = ThemeManager:GetColor("Text"),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Position = UDim2.new(0, 10, 0, 0),
+                    Size = UDim2.new(0.5, -10, 1, 0),
+                    BackgroundTransparency = 1
+                })
+            })
+            ThemeManager:Register(InputFrame, "BackgroundColor3", "Card")
+
+            local TextBox = Create("TextBox", {
+                PlaceholderText = placeholder,
+                Text = "",
+                Font = Enum.Font.Gotham,
+                TextSize = 12,
+                TextColor3 = ThemeManager:GetColor("Text"),
+                PlaceholderColor3 = ThemeManager:GetColor("SubText"),
+                BackgroundColor3 = ThemeManager:GetColor("SecondaryBackground"),
+                Size = UDim2.new(0.5, -10, 0, 24),
+                Position = UDim2.new(0.5, 0, 0.5, -12),
+                BorderSizePixel = 0,
+                ClearTextOnFocus = false,
+                Parent = InputFrame
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 4) }),
+                Create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) })
+            })
+
+            TextBox.FocusLost:Connect(function(enterPressed)
+                pcall(callback, TextBox.Text, enterPressed)
+            end)
+
+            return {
+                Get = function() return TextBox.Text end,
+                Set = function(t) TextBox.Text = tostring(t) end
+            }
+        end
+        Tab.AddInput = Tab.CreateInput
+
+        -- Component: Keybind
+        function Tab:CreateKeybind(opts)
+            opts = opts or {}
+            local keyName = opts.Name or opts.Title or "Keybind"
+            local default = opts.Default or "None"
+            local callback = opts.Callback or function() end
+            local boundKey = typeof(default) == "EnumItem" and default.Name or tostring(default)
+            local listening = false
+
+            local KeyFrame = Create("Frame", {
+                Name = keyName .. "_Keybind",
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = ThemeManager:GetColor("Card"),
+                BorderSizePixel = 0,
+                Parent = TabContent
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+                Create("UIStroke", { Color = ThemeManager:GetColor("Stroke"), Thickness = 1 }),
+                Create("TextLabel", {
+                    Text = keyName,
+                    Font = Enum.Font.GothamMedium,
+                    TextSize = 13,
+                    TextColor3 = ThemeManager:GetColor("Text"),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Position = UDim2.new(0, 10, 0, 0),
+                    Size = UDim2.new(1, -80, 1, 0),
+                    BackgroundTransparency = 1
+                })
+            })
+            ThemeManager:Register(KeyFrame, "BackgroundColor3", "Card")
+
+            local KeyBtn = Create("TextButton", {
+                Text = "[" .. boundKey .. "]",
+                Font = Enum.Font.GothamBold,
+                TextSize = 12,
+                TextColor3 = ThemeManager:GetColor("Accent"),
+                BackgroundColor3 = ThemeManager:GetColor("SecondaryBackground"),
+                Size = UDim2.new(0, 65, 0, 24),
+                Position = UDim2.new(1, -75, 0.5, -12),
+                BorderSizePixel = 0,
+                Parent = KeyFrame
+            }, {
+                Create("UICorner", { CornerRadius = UDim.new(0, 4) })
+            })
+
+            KeyBtn.MouseButton1Click:Connect(function()
+                listening = true
+                KeyBtn.Text = "[...]"
+            end)
+
+            UserInputService.InputBegan:Connect(function(input, gpe)
+                if listening and not gpe then
+                    if input.UserInputType == Enum.UserInputType.Keyboard then
+                        boundKey = input.KeyCode.Name
+                        KeyBtn.Text = "[" .. boundKey .. "]"
+                        listening = false
+                    end
+                elseif not gpe and input.UserInputType == Enum.UserInputType.Keyboard then
+                    if input.KeyCode.Name == boundKey then
+                        pcall(callback)
+                    end
+                end
+            end)
+
+            return {
+                Set = function(k)
+                    boundKey = tostring(k)
+                    KeyBtn.Text = "[" .. boundKey .. "]"
+                end,
+                Value = boundKey
+            }
+        end
+        Tab.AddKeybind = Tab.CreateKeybind
+
+        -- Component: Section
+        function Tab:CreateSection(name)
+            local SectionLabel = Create("TextLabel", {
+                Name = name .. "_Section",
+                Text = string.upper(name),
+                Font = Enum.Font.GothamBold,
+                TextSize = 11,
+                TextColor3 = ThemeManager:GetColor("SubText"),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Size = UDim2.new(1, 0, 0, 20),
+                BackgroundTransparency = 1,
+                Parent = TabContent
+            }, {
+                Create("UIPadding", { PaddingLeft = UDim.new(0, 4) })
+            })
+            return SectionLabel
+        end
+        Tab.AddSection = Tab.CreateSection
+
+        -- Component: Divider
+        function Tab:AddDivider()
+            local Divider = Create("Frame", {
+                Name = "Divider",
+                Size = UDim2.new(1, 0, 0, 1),
+                BackgroundColor3 = ThemeManager:GetColor("Stroke"),
+                BorderSizePixel = 0,
+                Parent = TabContent
+            })
+            return Divider
+        end
+        Tab.AddSeparator = Tab.AddDivider
+
+        return Tab
+    end
+    Window.AddTab = Window.CreateTab
+
+    -- Key System Support
+    if KeySystem then
+        MainFrame.Visible = false
+        local KeyModal = Create("Frame", {
+            Name = "KeySystemModal",
+            Size = UDim2.new(0, 360, 0, 220),
+            Position = UDim2.new(0.5, -180, 0.5, -110),
+            BackgroundColor3 = ThemeManager:GetColor("Background"),
+            BorderSizePixel = 0,
+            Parent = ScreenGui
+        }, {
+            Create("UICorner", { CornerRadius = UDim.new(0, 10) }),
+            Create("UIStroke", { Color = ThemeManager:GetColor("Stroke"), Thickness = 1 })
+        })
+
+        local KeyTitle = Create("TextLabel", {
+            Text = KeySettings.Title or "♨️ Key Verification",
+            Font = Enum.Font.GothamBold,
+            TextSize = 16,
+            TextColor3 = ThemeManager:GetColor("Text"),
+            Size = UDim2.new(1, -20, 0, 25),
+            Position = UDim2.new(0, 10, 0, 15),
+            BackgroundTransparency = 1,
+            Parent = KeyModal
+        })
+
+        local KeyDesc = Create("TextLabel", {
+            Text = KeySettings.Description or "Please enter your license key to gain access.",
+            Font = Enum.Font.Gotham,
+            TextSize = 12,
+            TextColor3 = ThemeManager:GetColor("SubText"),
+            TextWrapped = true,
+            Size = UDim2.new(1, -24, 0, 40),
+            Position = UDim2.new(0, 12, 0, 42),
+            BackgroundTransparency = 1,
+            Parent = KeyModal
+        })
+
+        local KeyInput = Create("TextBox", {
+            PlaceholderText = "Enter Key Here...",
+            Text = "",
+            Font = Enum.Font.Gotham,
+            TextSize = 13,
+            TextColor3 = ThemeManager:GetColor("Text"),
+            PlaceholderColor3 = ThemeManager:GetColor("SubText"),
+            BackgroundColor3 = ThemeManager:GetColor("SecondaryBackground"),
+            Size = UDim2.new(1, -24, 0, 36),
+            Position = UDim2.new(0, 12, 0, 95),
+            BorderSizePixel = 0,
+            ClearTextOnFocus = false,
+            Parent = KeyModal
+        }, {
+            Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+            Create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
+        })
+
+        local SubmitBtn = Create("TextButton", {
+            Text = "Verify Key",
+            Font = Enum.Font.GothamBold,
+            TextSize = 13,
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundColor3 = ThemeManager:GetColor("Accent"),
+            Size = UDim2.new(0.5, -16, 0, 34),
+            Position = UDim2.new(0, 12, 0, 145),
+            BorderSizePixel = 0,
+            Parent = KeyModal
+        }, {
+            Create("UICorner", { CornerRadius = UDim.new(0, 6) })
+        })
+
+        local GetKeyBtn = Create("TextButton", {
+            Text = "Get Key",
+            Font = Enum.Font.GothamMedium,
+            TextSize = 13,
+            TextColor3 = ThemeManager:GetColor("Text"),
+            BackgroundColor3 = ThemeManager:GetColor("Card"),
+            Size = UDim2.new(0.5, -16, 0, 34),
+            Position = UDim2.new(0.5, 4, 0, 145),
+            BorderSizePixel = 0,
+            Parent = KeyModal
+        }, {
+            Create("UICorner", { CornerRadius = UDim.new(0, 6) })
+        })
+
+        GetKeyBtn.MouseButton1Click:Connect(function()
+            if KeySettings.GetKeyLink and setclipboard then
+                setclipboard(KeySettings.GetKeyLink)
+                SteamyUI:Notify({ Title = "Copied", Content = "Key link copied to clipboard!" })
+            end
+        end)
+
+        SubmitBtn.MouseButton1Click:Connect(function()
+            local key = KeyInput.Text
+            local isValid = false
+            local message = ""
+
+            if KeySettings.ValidateFunction then
+                isValid, message = KeySettings.ValidateFunction(key)
+            elseif KeySettings.Keys and table.find(KeySettings.Keys, key) then
+                isValid = true
+                message = "Access Granted!"
+            end
+
+            if isValid then
+                SteamyUI:Notify({ Title = "Success", Content = message or "Verified!", Type = "Success" })
+                KeyModal:Destroy()
+                MainFrame.Visible = true
+                Window.KeyValidated = true
+            else
+                SteamyUI:Notify({ Title = "Failed", Content = message or "Invalid Key", Type = "Error" })
+            end
+        end)
+    end
+
+    table.insert(SteamyUI.Windows, Window)
+    return Window
+end
+
+SteamyUI.new = SteamyUI.CreateWindow
+
+function SteamyUI:SetTheme(themeName)
+    ThemeManager:SetTheme(themeName)
+end
+
+function SteamyUI:Destroy()
+    for _, win in ipairs(SteamyUI.Windows) do
+        if win.ScreenGui then
+            win.ScreenGui:Destroy()
+        end
+    end
+    SteamyUI.Windows = {}
+end
+
+return SteamyUI
