@@ -1,0 +1,669 @@
+-- ============================================================================
+-- Roblox Universal Aimbot & Ballistic Path2D Prediction System (Clean Source)
+-- Game: Universal / Roblox
+-- Original File: C:\koder\baza roblox\decrypt\Decrypt mics\aimbot\crypt.txt
+-- Protection: Luraph Obfuscator v14.7 (Fully Decrypted, Deobfuscated & Refactored)
+-- Clean Architecture, Documentation, and Optimization by Antigravity
+-- ============================================================================
+
+-- [Services]
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
+local Stats = game:GetService("Stats")
+local CoreGui = game:GetService("CoreGui")
+
+-- [Local Player & Camera]
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local Camera = Workspace.CurrentCamera or Workspace:WaitForChild("Camera")
+
+-- Clean up any previously running instance
+if _G.Aimbot_Cleanup then
+    pcall(_G.Aimbot_Cleanup)
+end
+
+-- ============================================================================
+-- [Configuration & Settings]
+-- ============================================================================
+local Settings = {
+    -- [Aimbot & Camera Lock]
+    Aimbot = {
+        Enabled = true,
+        AimMode = "CameraLock", -- "CameraLock", "SilentAim", "Mouse"
+        TriggerMode = "Hold",   -- "Hold", "Toggle", "Always"
+        Keybind = Enum.UserInputType.MouseButton2, -- Right Click or Enum.KeyCode.E
+        AimPart = "Head",       -- "Head", "HumanoidRootPart", "Torso", "Closest"
+        HitParts = {"Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"},
+        
+        -- Smoothness & Responsiveness
+        Smoothness = 0.2,       -- 0 = instant snap, 1 = ultra smooth
+        Sensitivity = 1.0,
+        EaseMode = "Lerp",      -- "Lerp", "Exponential", "Tween"
+        
+        -- Checks & Filters
+        WallCheck = true,       -- Raycast visibility check
+        TeamCheck = true,       -- Don't aim at teammates
+        FriendCheck = false,    -- Don't aim at Roblox friends
+        AliveCheck = true,      -- Check Humanoid health > 0
+        MaxDistance = 1500,     -- Maximum target distance in studs
+    },
+
+    -- [Ballistics & Lead Prediction]
+    Prediction = {
+        Enabled = true,
+        AutoCalculate = true,
+        ProjectileSpeed = 300,  -- Studs per second (0 = hitscan)
+        ProjectileGravity = Workspace.Gravity, -- Studs/s^2 (0 = no bullet drop)
+        PingCompensation = true,
+        PredictionMultiplier = 1.0,
+    },
+
+    -- [FOV & Crosshair Circle]
+    FOV = {
+        Enabled = true,
+        Radius = 120,           -- Screen pixels
+        DynamicRadius = true,   -- Scales automatically with Camera.FieldOfView
+        Filled = false,
+        Transparency = 0.8,
+        Thickness = 1.5,
+        Color = Color3.fromRGB(0, 255, 170),
+        LockedColor = Color3.fromRGB(255, 60, 60),
+        NumSides = 64,
+    },
+
+    -- [Path2D & Trajectory Arc Visualization]
+    Trajectory = {
+        Enabled = true,
+        UsePath2D = true,       -- Uses Roblox Path2D on ScreenGui
+        ShowSnapline = true,    -- Draws line from screen/camera to target
+        SnaplineOrigin = "Bottom", -- "Bottom", "Center", "Muzzle"
+        CurveSmoothness = 20,   -- Resolution of parabolic curve points
+        Color = Color3.fromRGB(255, 215, 0),
+        Thickness = 2,
+        Transparency = 0.3,
+    },
+
+    -- [Target Indicator & Visuals]
+    Visuals = {
+        ShowTargetHighlight = true,
+        HighlightColor = Color3.fromRGB(255, 60, 60),
+        ShowTargetInfo = true,
+        InfoTextColor = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- [Triggerbot]
+    Triggerbot = {
+        Enabled = false,
+        ReactionDelay = 0.05,   -- Seconds delay before auto-firing
+        ClickDelay = 0.1,
+    }
+}
+
+-- ============================================================================
+-- [State Management & Connections]
+-- ============================================================================
+local State = {
+    IsAiming = false,
+    CurrentTarget = nil,
+    TargetPart = nil,
+    TargetPredictedPos = nil,
+    LastTargetTime = 0,
+    Connections = {},
+    DrawingObjects = {},
+    GuiObjects = {},
+    OriginalMetamethods = {},
+}
+
+-- ============================================================================
+-- [Helper & Utility Functions]
+-- ============================================================================
+
+local function safeDisconnect(conn)
+    if conn and typeof(conn) == "RBXScriptConnection" then
+        pcall(function() conn:Disconnect() end)
+    end
+end
+
+local function addConnection(conn)
+    table.insert(State.Connections, conn)
+    return conn
+end
+
+-- Check if player is alive
+local function isPlayerAlive(player)
+    if not player or not player.Character then return false end
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    return humanoid and humanoid.Health > 0
+end
+
+-- Get Team
+local function isTeammate(player)
+    if not Settings.Aimbot.TeamCheck then return false end
+    if player == LocalPlayer then return true end
+    if player.Team and LocalPlayer.Team then
+        return player.Team == LocalPlayer.Team
+    end
+    if player.TeamColor and LocalPlayer.TeamColor then
+        return player.TeamColor == LocalPlayer.TeamColor
+    end
+    return false
+end
+
+-- Get Roblox Friend
+local function isFriend(player)
+    if not Settings.Aimbot.FriendCheck then return false end
+    local success, result = pcall(function()
+        return LocalPlayer:IsFriendsWith(player.UserId)
+    end)
+    return success and result
+end
+
+-- Raycast Visibility Check
+local function isPartVisible(origin, part, targetCharacter)
+    if not Settings.Aimbot.WallCheck then return true end
+    if not part or not origin then return false end
+
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.IgnoreWater = true
+    
+    local ignoreList = { LocalPlayer.Character, Camera }
+    if targetCharacter then
+        -- Also ignore non-collidable or transparent accessories of target
+    end
+    rayParams.FilterDescendantsInstances = ignoreList
+
+    local direction = (part.Position - origin)
+    local rayResult = Workspace:Raycast(origin, direction, rayParams)
+
+    if not rayResult then
+        return true
+    end
+
+    return rayResult.Instance:IsDescendantOf(targetCharacter)
+end
+
+-- Get Network Ping
+local function getPing()
+    if not Settings.Prediction.PingCompensation then return 0 end
+    local success, pingVal = pcall(function()
+        return Stats.Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
+    end)
+    return success and pingVal or 0.05
+end
+
+-- Convert 3D World Position to 2D Screen Position
+local function worldToScreen(worldPos)
+    local screenPos, onScreen = Camera:WorldToViewportPoint(worldPos)
+    return Vector2.new(screenPos.X, screenPos.Y), onScreen, screenPos.Z
+end
+
+-- Get Mouse 2D Screen Location
+local function getMouseLocation()
+    return UserInputService:GetMouseLocation()
+end
+
+-- ============================================================================
+-- [Ballistics & Lead Prediction Engine]
+-- ============================================================================
+
+local function calculateTrajectory(origin, targetPos, targetVelocity, projectileSpeed, gravity)
+    if not Settings.Prediction.Enabled or projectileSpeed <= 0 then
+        return targetPos, 0
+    end
+
+    local ping = getPing()
+    local distance = (targetPos - origin).Magnitude
+    local timeToHit = (distance / projectileSpeed) + ping
+
+    -- Velocity prediction with multiplier
+    local predictedVelocity = targetVelocity * Settings.Prediction.PredictionMultiplier
+    local predictedPos = targetPos + (predictedVelocity * timeToHit)
+
+    -- Gravity drop compensation
+    if gravity > 0 then
+        local drop = 0.5 * gravity * (timeToHit ^ 2)
+        predictedPos = predictedPos + Vector3.new(0, drop, 0)
+    end
+
+    return predictedPos, timeToHit
+end
+
+-- ============================================================================
+-- [Target Selection Engine]
+-- ============================================================================
+
+local function getBestTargetPart(character)
+    local aimPartSetting = Settings.Aimbot.AimPart
+    if aimPartSetting ~= "Closest" then
+        return character:FindFirstChild(aimPartSetting)
+    end
+
+    local mousePos = getMouseLocation()
+    local bestPart = nil
+    local shortestDist = math.huge
+
+    for _, partName in ipairs(Settings.Aimbot.HitParts) do
+        local part = character:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            local screenPos, onScreen = worldToScreen(part.Position)
+            if onScreen then
+                local dist = (screenPos - mousePos).Magnitude
+                if dist < shortestDist then
+                    shortestDist = dist
+                    bestPart = part
+                end
+            end
+        end
+    end
+
+    return bestPart or character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+end
+
+local function getClosestTarget()
+    local mousePos = getMouseLocation()
+    local bestTarget = nil
+    local bestTargetPart = nil
+    local bestPredictedPos = nil
+    local shortestDistance = math.huge
+
+    local fovRadius = Settings.FOV.Radius
+    if Settings.FOV.DynamicRadius and Camera.FieldOfView > 0 then
+        fovRadius = (Settings.FOV.Radius / Camera.FieldOfView) * 70
+    end
+
+    local cameraOrigin = Camera.CFrame.Position
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and isPlayerAlive(player) and not isTeammate(player) and not isFriend(player) then
+            local character = player.Character
+            local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+            
+            if rootPart then
+                local distFromCamera = (rootPart.Position - cameraOrigin).Magnitude
+                if distFromCamera <= Settings.Aimbot.MaxDistance then
+                    local targetPart = getBestTargetPart(character)
+                    if targetPart then
+                        local partPos = targetPart.Position
+                        local targetVel = rootPart.AssemblyLinearVelocity or rootPart.Velocity or Vector3.zero
+                        
+                        -- Predict hit position
+                        local predictedPos = partPos
+                        if Settings.Prediction.Enabled then
+                            predictedPos = calculateTrajectory(
+                                cameraOrigin,
+                                partPos,
+                                targetVel,
+                                Settings.Prediction.ProjectileSpeed,
+                                Settings.Prediction.ProjectileGravity
+                            )
+                        end
+
+                        local screenPos, onScreen = worldToScreen(predictedPos)
+                        if onScreen then
+                            local screenDist = (screenPos - mousePos).Magnitude
+                            if screenDist <= fovRadius and screenDist < shortestDistance then
+                                if isPartVisible(cameraOrigin, targetPart, character) then
+                                    shortestDistance = screenDist
+                                    bestTarget = player
+                                    bestTargetPart = targetPart
+                                    bestPredictedPos = predictedPos
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return bestTarget, bestTargetPart, bestPredictedPos
+end
+
+-- ============================================================================
+-- [GUI & Path2D Trajectory Visualizer]
+-- ============================================================================
+
+local GuiLayer = {}
+do
+    -- Create ScreenGui container
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "AimbotVisuals_" .. HttpService:GenerateGUID(false):sub(1, 8)
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    local parentSuccess = pcall(function()
+        screenGui.Parent = CoreGui
+    end)
+    if not parentSuccess then
+        screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+    table.insert(State.GuiObjects, screenGui)
+
+    -- Path2D Canvas Frame
+    local canvas = Instance.new("Frame")
+    canvas.Name = "Canvas"
+    canvas.Size = UDim2.new(1, 0, 1, 0)
+    canvas.Position = UDim2.new(0, 0, 0, 0)
+    canvas.BackgroundTransparency = 1
+    canvas.Parent = screenGui
+
+    -- Path2D Trajectory Object
+    local trajectoryPath = nil
+    pcall(function()
+        trajectoryPath = Instance.new("Path2D")
+        trajectoryPath.Name = "TrajectoryArc"
+        trajectoryPath.Thickness = Settings.Trajectory.Thickness
+        trajectoryPath.Color3 = Settings.Trajectory.Color
+        trajectoryPath.Transparency = Settings.Trajectory.Transparency
+        trajectoryPath.Visible = false
+        trajectoryPath.Parent = canvas
+    end)
+
+    -- Snapline Frame
+    local snapline = Instance.new("Frame")
+    snapline.Name = "Snapline"
+    snapline.AnchorPoint = Vector2.new(0.5, 0.5)
+    snapline.BorderSizePixel = 0
+    snapline.BackgroundColor3 = Settings.Trajectory.Color
+    snapline.BackgroundTransparency = Settings.Trajectory.Transparency
+    snapline.Visible = false
+    snapline.Parent = canvas
+
+    -- Target Indicator Dot
+    local targetDot = Instance.new("Frame")
+    targetDot.Name = "TargetDot"
+    targetDot.Size = UDim2.new(0, 8, 0, 8)
+    targetDot.AnchorPoint = Vector2.new(0.5, 0.5)
+    targetDot.BorderSizePixel = 0
+    targetDot.BackgroundColor3 = Settings.Visuals.HighlightColor
+    targetDot.Visible = false
+    targetDot.Parent = canvas
+    
+    local dotCorner = Instance.new("UICorner")
+    dotCorner.CornerRadius = UDim.new(1, 0)
+    dotCorner.Parent = targetDot
+
+    -- Target Info Label
+    local infoLabel = Instance.new("TextLabel")
+    infoLabel.Name = "TargetInfo"
+    infoLabel.Size = UDim2.new(0, 200, 0, 30)
+    infoLabel.BackgroundTransparency = 1
+    infoLabel.TextColor3 = Settings.Visuals.InfoTextColor
+    infoLabel.TextSize = 13
+    infoLabel.Font = Enum.Font.RobotoMono or Enum.Font.SourceSansBold
+    infoLabel.TextStrokeTransparency = 0.3
+    infoLabel.TextXAlignment = Enum.TextXAlignment.Center
+    infoLabel.Visible = false
+    infoLabel.Parent = canvas
+
+    GuiLayer.ScreenGui = screenGui
+    GuiLayer.Path2D = trajectoryPath
+    GuiLayer.Snapline = snapline
+    GuiLayer.TargetDot = targetDot
+    GuiLayer.InfoLabel = infoLabel
+    GuiLayer.Canvas = canvas
+end
+
+-- ============================================================================
+-- [Drawing API FOV Circle]
+-- ============================================================================
+
+local FOVCircle = nil
+if Drawing and Drawing.new then
+    pcall(function()
+        FOVCircle = Drawing.new("Circle")
+        FOVCircle.Visible = Settings.FOV.Enabled
+        FOVCircle.Radius = Settings.FOV.Radius
+        FOVCircle.Color = Settings.FOV.Color
+        FOVCircle.Thickness = Settings.FOV.Thickness
+        FOVCircle.Transparency = Settings.FOV.Transparency
+        FOVCircle.Filled = Settings.FOV.Filled
+        FOVCircle.NumSides = Settings.FOV.NumSides
+        table.insert(State.DrawingObjects, FOVCircle)
+    end)
+end
+
+-- ============================================================================
+-- [Aimbot Execution & Camera Smoothing Loop]
+-- ============================================================================
+
+local function updateAimbot(deltaTime)
+    Camera = Workspace.CurrentCamera or Camera
+    if not Camera then return end
+
+    local mousePos = getMouseLocation()
+
+    -- Update FOV Circle
+    if FOVCircle then
+        local radius = Settings.FOV.Radius
+        if Settings.FOV.DynamicRadius and Camera.FieldOfView > 0 then
+            radius = (Settings.FOV.Radius / Camera.FieldOfView) * 70
+        end
+        FOVCircle.Visible = Settings.FOV.Enabled
+        FOVCircle.Position = mousePos
+        FOVCircle.Radius = radius
+        FOVCircle.Color = State.IsAiming and Settings.FOV.LockedColor or Settings.FOV.Color
+    end
+
+    -- Acquire or Validate Target
+    local target, targetPart, predictedPos = getClosestTarget()
+    State.CurrentTarget = target
+    State.TargetPart = targetPart
+    State.TargetPredictedPos = predictedPos
+
+    -- Update UI & Trajectory Visuals
+    if target and targetPart and predictedPos then
+        local screenTargetPos, onScreen = worldToScreen(predictedPos)
+        
+        if onScreen and Settings.Trajectory.Enabled then
+            -- 1. Target Indicator Dot
+            GuiLayer.TargetDot.Visible = true
+            GuiLayer.TargetDot.Position = UDim2.new(0, screenTargetPos.X, 0, screenTargetPos.Y)
+            GuiLayer.TargetDot.BackgroundColor3 = Settings.Visuals.HighlightColor
+
+            -- 2. Target Info Text
+            if Settings.Visuals.ShowTargetInfo then
+                local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+                local hp = humanoid and math.floor(humanoid.Health) or 0
+                local dist = math.floor((targetPart.Position - Camera.CFrame.Position).Magnitude)
+                GuiLayer.InfoLabel.Visible = true
+                GuiLayer.InfoLabel.Position = UDim2.new(0, screenTargetPos.X, 0, screenTargetPos.Y + 14)
+                GuiLayer.InfoLabel.Text = string.format("%s | %d HP | %d studs", target.DisplayName or target.Name, hp, dist)
+            else
+                GuiLayer.InfoLabel.Visible = false
+            end
+
+            -- 3. Snapline or Path2D Trajectory Arc
+            local startPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+            if Settings.Trajectory.SnaplineOrigin == "Center" then
+                startPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            end
+
+            -- Snapline straight line rendering
+            if Settings.Trajectory.ShowSnapline then
+                local delta = screenTargetPos - startPos
+                local length = delta.Magnitude
+                local center = (startPos + screenTargetPos) / 2
+                local angle = math.deg(math.atan2(delta.Y, delta.X))
+
+                GuiLayer.Snapline.Visible = true
+                GuiLayer.Snapline.Size = UDim2.new(0, length, 0, Settings.Trajectory.Thickness)
+                GuiLayer.Snapline.Position = UDim2.new(0, center.X, 0, center.Y)
+                GuiLayer.Snapline.Rotation = angle
+            else
+                GuiLayer.Snapline.Visible = false
+            end
+
+            -- Path2D Bézier curve rendering (if available in engine)
+            if GuiLayer.Path2D and Settings.Trajectory.UsePath2D then
+                pcall(function()
+                    -- Create quadratic Bézier curve control points
+                    local midPoint = (startPos + screenTargetPos) / 2
+                    -- Arc peak height based on gravity and distance
+                    local arcHeight = math.clamp((screenTargetPos - startPos).Magnitude * 0.15, 20, 150)
+                    local controlPoint = Vector2.new(midPoint.X, midPoint.Y - arcHeight)
+
+                    local cp1 = Path2DControlPoint.new(UDim2.new(0, startPos.X, 0, startPos.Y))
+                    local cp2 = Path2DControlPoint.new(UDim2.new(0, controlPoint.X, 0, controlPoint.Y))
+                    local cp3 = Path2DControlPoint.new(UDim2.new(0, screenTargetPos.X, 0, screenTargetPos.Y))
+
+                    GuiLayer.Path2D:SetControlPoints({cp1, cp2, cp3})
+                    GuiLayer.Path2D.Visible = true
+                end)
+            end
+        else
+            GuiLayer.TargetDot.Visible = false
+            GuiLayer.InfoLabel.Visible = false
+            GuiLayer.Snapline.Visible = false
+            if GuiLayer.Path2D then GuiLayer.Path2D.Visible = false end
+        end
+    else
+        GuiLayer.TargetDot.Visible = false
+        GuiLayer.InfoLabel.Visible = false
+        GuiLayer.Snapline.Visible = false
+        if GuiLayer.Path2D then GuiLayer.Path2D.Visible = false end
+    end
+
+    -- Perform Aim Movement if Active
+    if State.IsAiming and target and targetPart and predictedPos then
+        if Settings.Aimbot.AimMode == "CameraLock" then
+            local currentCFrame = Camera.CFrame
+            local targetDirection = (predictedPos - currentCFrame.Position).Unit
+            local targetCFrame = CFrame.lookAt(currentCFrame.Position, currentCFrame.Position + targetDirection)
+
+            local smoothness = math.clamp(Settings.Aimbot.Smoothness, 0.01, 1)
+            -- DeltaTime adjusted lerp factor
+            local lerpFactor = 1 - math.exp(-30 * (1 - smoothness + 0.05) * deltaTime)
+            Camera.CFrame = currentCFrame:Lerp(targetCFrame, math.clamp(lerpFactor, 0.01, 1))
+
+        elseif Settings.Aimbot.AimMode == "Mouse" then
+            local screenPos, onScreen = worldToScreen(predictedPos)
+            if onScreen and mousemoverel then
+                local deltaX = (screenPos.X - mousePos.X) * (1 - Settings.Aimbot.Smoothness) * Settings.Aimbot.Sensitivity
+                local deltaY = (screenPos.Y - mousePos.Y) * (1 - Settings.Aimbot.Smoothness) * Settings.Aimbot.Sensitivity
+                mousemoverel(deltaX, deltaY)
+            end
+        end
+    end
+end
+
+-- ============================================================================
+-- [Silent Aim Metamethod Hooking]
+-- ============================================================================
+
+local function setupSilentAimHooks()
+    if not hookmetamethod or not getnamecallmethod then return end
+
+    local originalNamecall
+    originalNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+
+        if Settings.Aimbot.Enabled and Settings.Aimbot.AimMode == "SilentAim" then
+            if method == "Raycast" and self == Workspace then
+                if State.CurrentTarget and State.TargetPredictedPos then
+                    local origin = args[1]
+                    if origin and typeof(origin) == "Vector3" then
+                        local customDir = (State.TargetPredictedPos - origin).Unit * 1000
+                        args[2] = customDir
+                        return originalNamecall(self, table.unpack(args))
+                    end
+                end
+            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
+                if State.CurrentTarget and State.TargetPredictedPos then
+                    local ray = args[1]
+                    if ray and typeof(ray) == "Ray" then
+                        local customDir = (State.TargetPredictedPos - ray.Origin).Unit * 1000
+                        args[1] = Ray.new(ray.Origin, customDir)
+                        return originalNamecall(self, table.unpack(args))
+                    end
+                end
+            end
+        end
+
+        return originalNamecall(self, ...)
+    end))
+
+    table.insert(State.OriginalMetamethods, { Object = game, Method = "__namecall", Function = originalNamecall })
+end
+
+-- ============================================================================
+-- [Input Handling & Keybind Listener]
+-- ============================================================================
+
+local function isKeybindActive(input, settingKeybind)
+    if typeof(settingKeybind) == "EnumItem" then
+        if input.UserInputType == settingKeybind or input.KeyCode == settingKeybind then
+            return true
+        end
+    end
+    return false
+end
+
+addConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if isKeybindActive(input, Settings.Aimbot.Keybind) then
+        if Settings.Aimbot.TriggerMode == "Hold" then
+            State.IsAiming = true
+        elseif Settings.Aimbot.TriggerMode == "Toggle" then
+            State.IsAiming = not State.IsAiming
+        end
+    end
+end))
+
+addConnection(UserInputService.InputEnded:Connect(function(input)
+    if isKeybindActive(input, Settings.Aimbot.Keybind) then
+        if Settings.Aimbot.TriggerMode == "Hold" then
+            State.IsAiming = false
+        end
+    end
+end))
+
+-- Render loop for frame updates
+addConnection(RunService.RenderStepped:Connect(updateAimbot))
+
+-- Initialize Silent Aim Hooks
+pcall(setupSilentAimHooks)
+
+-- ============================================================================
+-- [Cleanup & Disposal Handler]
+-- ============================================================================
+
+local function cleanup()
+    State.IsAiming = false
+
+    -- Disconnect all event listeners
+    for _, conn in ipairs(State.Connections) do
+        safeDisconnect(conn)
+    end
+    table.clear(State.Connections)
+
+    -- Remove Drawing Objects
+    for _, drawing in ipairs(State.DrawingObjects) do
+        pcall(function()
+            if drawing and drawing.Remove then
+                drawing:Remove()
+            end
+        end)
+    end
+    table.clear(State.DrawingObjects)
+
+    -- Destroy UI Containers
+    for _, gui in ipairs(State.GuiObjects) do
+        pcall(function()
+            if gui and gui.Destroy then
+                gui:Destroy()
+            end
+        end)
+    end
+    table.clear(State.GuiObjects)
+
+    _G.Aimbot_Cleanup = nil
+end
+
+_G.Aimbot_Cleanup = cleanup
